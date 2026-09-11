@@ -91,7 +91,7 @@ ros2 launch navigation navigation.launch.py map:=map_01
 ## Simulation (PC, no hardware)
 
 The user-facing how-to, in Thai, is `ROSpider/SIMULATION.md`. Entry points:
-- `ros2 launch rospider_gazebo {gazebo,slam,navigation,moveit}.launch.py`
+- `ros2 launch rospider_gazebo {gazebo,slam,rtabmap_slam,vslam,navigation,rtabmap_navigation,moveit}.launch.py`
 - URDF viewer: `rospider_description display.launch.py`, which needs `need_compile=True`
 - MoveIt on mock hardware: `robot_moveit_config demo.launch.py`
 
@@ -113,6 +113,27 @@ The user-facing how-to, in Thai, is `ROSpider/SIMULATION.md`. Entry points:
   - They are Humble-specific: slam_toolbox started as a non-lifecycle node, plugin names written with `/`, the TEB planner, and controller params without `use_sim_time`.
   - Their `sim:=true` still starts the hardware drivers.
   - `slam_toolbox` is brought up by a `nav2_lifecycle_manager`, not by `online_sync_launch.py`'s own autostart. The autostart sometimes loses the configure response, and then the node never activates and never publishes `/map`.
+- **V-SLAM (`rtabmap_slam.launch.py`, `vslam.launch.py`).**
+  - `vslam.launch.py` is camera-only and self-contained.
+    - It uses only its own files: `config/vslam.yaml`, `config/vslam_nav2_params.yaml`, `rviz/vslam.rviz`. Maps go in `maps/vslam/`.
+    - Nothing in it subscribes to `/scan`.
+    - Its RTAB-Map values are Hiwonder's minus the LiDAR: `subscribe_scan` false, `Reg/Strategy` 0 (visual), `Grid/Sensor` 1 (depth).
+    - It also sets `map_always_update` true. Otherwise `/map` is only published when a node is added, and `map_saver` times out once the robot stands still.
+  - `localization:=true` loads the 3D map.
+    - It sets `Mem/IncrementalMemory` false and `Mem/InitWMWithAllNodes` true, and never passes `-d`, since `-d` deletes the database.
+    - It adds nav2_bringup's `navigation_launch.py` with `vslam_nav2_params.yaml`. Every obstacle source there is `/vslam/obstacle_cloud`: a ~2k-point cloud from `rtabmap_util/point_cloud_xyz` (decimation 4, 5 cm voxels, 0.2–3 m).
+    - The gz camera cloud (307k points at 15 Hz) was too heavy. With both costmaps and the collision monitor reading it, the planner stopped acknowledging goals in time, and goals aborted.
+    - The collision monitor uses `base_shift_correction: false`, because the camera's TF comes from the arm's joint_states and lags the cloud.
+    - Camera-only maps store no scans, so use this mode rather than `rtabmap_navigation.launch.py`, which uses ICP registration.
+  - `rtabmap_slam.launch.py` uses Hiwonder's `slam/launch/include/rtabmap.launch.py` unchanged. That file works on Jazzy, and its topic names already match the sim. It starts `rtabmap` with `-d`, which recreates the database on every run.
+  - `rtabmap_navigation.launch.py` reuses a saved map. It combines Hiwonder's `navigation/launch/include/rtabmap.launch.py` (localization mode, `Mem/IncrementalMemory` false: adds no new nodes, though `rtabmap` still writes to the `.db` on shutdown) with nav2_bringup's `navigation_launch.py`, without map_server/AMCL, since RTAB-Map publishes `/map` and `map→odom`.
+  - **Maps live in `ROSpider/maps/`.** Every launch that saves or loads a map takes `map:=<name>`, or a path containing `/`.
+    - `rospider_gazebo/maps.py` (installed with `ament_python_install_package`) resolves a name to `<workspace>/maps/<name>.db` or `.yaml`. It finds the workspace from the package's install prefix. `vslam.launch.py` uses the subfolder `maps/vslam/`.
+    - Hiwonder's includes hardcode `~/.ros/rtabmap.db`, so the resolved path is injected with `SetParameter` in a `GroupAction` around the include.
+    - `.db` files are git-ignored: they're tens to hundreds of MB, and GitHub rejects files over 100 MB. 2D maps are small and can be committed.
+    - Don't copy a `.db` while `rtabmap` is running; the copy comes out malformed.
+  - The camera sits on the arm. `gazebo.launch.py arm_pose:=horizontal` sets `joint4` to -0.286 so the camera is level, like the real robot's `init_horizontal` action. The default `init` pose tilts the camera 52° down at the floor.
+  - The world's walls are 1 m high and carry procedural poster textures (`worlds/textures/`). Without them, visual loop closure finds nothing to match.
 - **Nav2 params and map.**
   - `config/nav2_params.yaml` is Jazzy's defaults plus Hiwonder's values: DWB, `robot_radius` 0.01, max 0.05 m/s.
   - It deviates from Hiwonder's DWB values in two places. `FollowPath.xy_goal_tolerance` 0.15 would stall the robot 0.05–0.15 m short of the goal, because the goal checker wants 0.05. `sim_time` 10 made DWB crawl near the goal until the progress checker aborted. The real robot's `navigation/config` probably has the same issues (not tested on hardware).

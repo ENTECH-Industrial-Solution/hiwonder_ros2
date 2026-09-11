@@ -10,7 +10,10 @@
 | วางแผนแขนกลแบบไม่ใช้ Gazebo | `robot_moveit_config demo.launch.py` | mock hardware |
 | หุ่นในสภาพแวดล้อม + เซนเซอร์ | `rospider_gazebo gazebo.launch.py` | LiDAR, depth camera, IMU, odom |
 | ทำแผนที่ (SLAM) | `rospider_gazebo slam.launch.py` | slam_toolbox + ค่า `slam/config/slam.yaml` |
-| นำทาง (Nav2) | `rospider_gazebo navigation.launch.py` | ใช้แผนที่ห้อง sim ที่ทำไว้แล้ว |
+| ทำแผนที่ด้วยกล้อง + LiDAR | `rospider_gazebo rtabmap_slam.launch.py` | RTAB-Map (RGB-D + LiDAR) ด้วยค่าของ Hiwonder |
+| นำทางด้วยแผนที่ RTAB-Map | `rospider_gazebo rtabmap_navigation.launch.py` | RTAB-Map โหมด localization + Nav2 |
+| V-SLAM กล้องอย่างเดียว | `rospider_gazebo vslam.launch.py` | RTAB-Map ใช้แค่ depth camera (ภาพสี + depth) + odometry ไม่แตะ LiDAR เลย มีไฟล์ของตัวเองทั้งหมด — ทำแผนที่ หรือโหลดแผนที่ 3D มานำทาง (`localization:=true`) |
+| นำทาง (Nav2) | `rospider_gazebo navigation.launch.py` | แผนที่ 2D ห้อง sim ที่ทำไว้แล้ว หรือแผนที่ของเราเอง |
 | แขนกล MoveIt ใน Gazebo | `rospider_gazebo moveit.launch.py` | สั่งแขน/gripper ผ่าน MoveIt |
 
 **ข้อจำกัดสำคัญ:** โค้ดเดินจริงของ Hiwonder (`driver/kinematics/kinematics.so`) เป็น binary ของ ARM (Jetson) เท่านั้น ไม่มี source จึงรันบน PC ไม่ได้ ใน sim จึงใช้ท่าเดินที่เขียนขึ้นเอง (`scripts/sim_gait.py`) — ก้าวขาแบบ tripod (ยกทีละ 3 ขาสลับกัน) ตามความเร็วที่สั่ง เท้าที่แตะพื้นอยู่นิ่งกับพื้น แต่ตัวหุ่นถูก Gazebo เลื่อนไปตาม `cmd_vel` โดยตรง (ขาไม่ได้ออกแรงดันพื้นจริง) — เหมาะกับทดสอบ SLAM / Nav2 / vision / แขนกล แต่ไม่เหมาะกับทดสอบการเดินบนพื้นขรุขระ การทรงตัว หรือท่าเดินของหุ่นจริง
@@ -60,7 +63,7 @@ ros2 launch rospider_gazebo gazebo.launch.py
 ```
 
 โลกเริ่มต้นคือห้อง 4×3 ม. (`worlds/rospider_room.sdf`) มีกำแพงกั้น กล่อง ทรงกระบอก และลูกบาศก์สีแดง/เขียว/น้ำเงินหน้าหุ่นไว้ทดสอบ vision (ลูกบาศก์ไม่มี collision — หุ่นเดินทะลุได้ เพราะเตี้ยกว่าระนาบ LiDAR ทำให้ Nav2 หลบไม่ได้)
-argument: `world:=<path.sdf>`, `x:=` `y:=` `yaw:=` (จุดเกิด), `gui:=false` (ไม่เปิดหน้าต่าง Gazebo — ดูหัวข้อปัญหาที่พบบ่อย)
+argument: `world:=<path.sdf>`, `x:=` `y:=` `yaw:=` (จุดเกิด), `arm_pose:=horizontal` (ให้กล้องบนแขนมองตรงไปข้างหน้า แทนท่าเริ่มต้นที่ก้มมองพื้น), `gui:=false` (ไม่เปิดหน้าต่าง Gazebo — ดูหัวข้อปัญหาที่พบบ่อย)
 
 ขับหุ่นด้วยคีย์บอร์ด (อีก terminal):
 
@@ -87,17 +90,60 @@ Controller (ros2_control): `leg_controller`, `arm_controller`, `gripper_controll
 
 ดูภาพกล้อง: `ros2 run rqt_image_view rqt_image_view /depth_cam/rgb/image_raw`
 
-## 4. SLAM (ทำแผนที่)
+## 4. SLAM (ทำแผนที่ด้วย LiDAR)
 
 ```bash
 ros2 launch rospider_gazebo slam.launch.py
 ```
 
-เปิด Gazebo + slam_toolbox + RViz (`slam/rviz/slam.rviz`) แล้วขับหุ่นด้วย teleop ให้ทั่วห้อง จากนั้นบันทึกแผนที่:
+เปิด Gazebo + slam_toolbox + RViz (`slam/rviz/slam.rviz`) แล้วขับหุ่นด้วย teleop ให้ทั่วห้อง จากนั้นบันทึกแผนที่ 2D — ดูหัวข้อ "บันทึกและเรียกใช้แผนที่"
+
+## 4.1 RTAB-Map (กล้อง + LiDAR)
 
 ```bash
-ros2 run nav2_map_server map_saver_cli -f ~/my_map --ros-args -p use_sim_time:=true
+ros2 launch rospider_gazebo rtabmap_slam.launch.py map:=room1
 ```
+
+เปิด Gazebo โดยยกกล้องบนแขนให้มองตรงไปข้างหน้า (เหมือนท่า `init_horizontal` ที่หุ่นจริงใช้ก่อนรัน RTAB-Map) แล้วรัน RTAB-Map ด้วย launch ของ Hiwonder (`slam/launch/include/rtabmap.launch.py`) — ใช้ภาพสี + depth + LiDAR และ odometry จาก `/odom` พร้อม RViz (`slam/rviz/rtabmap.rviz`) แสดง point cloud, graph และแผนที่ 2D ขับหุ่นด้วย teleop ให้ทั่วห้อง ผนังและสิ่งกีดขวางในห้อง sim มีลวดลายให้กล้องจับ feature ได้ RTAB-Map จึงหา loop closure ได้ (ผนังสีเรียบจะหาไม่เจอ)
+
+- แผนที่ถูกบันทึกตอนปิด launch ลง `ROSpider/maps/room1.db` (ไม่ใส่ `map:=` จะเป็น `rtabmap.db`) — เริ่มรอบใหม่ด้วยชื่อเดิม ไฟล์เดิมจะถูกเขียนทับ
+- เปิดดูฐานข้อมูล: `rtabmap-databaseViewer maps/room1.db` (รันจากโฟลเดอร์ `ROSpider`)
+- RTAB-Map ใช้ CPU มาก real time factor จะลดลง (ราว 0.6 บนเครื่องที่ทดสอบ)
+
+## 4.2 V-SLAM กล้องอย่างเดียว (depth camera)
+
+```bash
+ros2 launch rospider_gazebo vslam.launch.py map:=room_vslam
+```
+
+V-SLAM รันด้วยไฟล์ของตัวเองทั้งหมด ไม่ยืมของ `rtabmap_slam` หรือของ Hiwonder:
+
+| ไฟล์ | ใช้ทำอะไร |
+|---|---|
+| `config/vslam.yaml` | ค่า RTAB-Map (มาจากค่าของ Hiwonder แต่ตัด LiDAR ออก) และค่าของ point cloud ที่ใช้หลบสิ่งกีดขวาง |
+| `config/vslam_nav2_params.yaml` | ค่า Nav2 ตอนนำทาง — หลบสิ่งกีดขวางด้วย depth camera |
+| `rviz/vslam.rviz` | RViz: ภาพกล้อง, point cloud 3D ของแผนที่, graph, แผนที่ 2D, costmap, เส้นทาง |
+| `ROSpider/maps/vslam/` | โฟลเดอร์แผนที่ของ V-SLAM |
+
+ไม่ใช้ LiDAR เลยทั้งตอนทำแผนที่และตอนนำทาง — RTAB-Map ใช้แค่ภาพสี + depth จาก depth camera และ odometry จาก `/odom`:
+
+- ต่อแผนที่และหา loop closure จาก feature ในภาพ (ไม่ใช้ ICP ของ LiDAR)
+- แผนที่ 2D สร้างจาก depth (ตัดพื้นออก และไม่นับจุดที่ใกล้กว่า 0.2 ม. เพราะกล้องเห็นนิ้ว gripper)
+- แผนที่ 3D ถูกบันทึกตอนปิดลง `ROSpider/maps/vslam/room_vslam.db` (ไม่ใส่ `map:=` จะเป็น `maps/vslam/map.db`) — เริ่มรอบใหม่ด้วยชื่อเดิม ไฟล์เดิมจะถูกเขียนทับ
+
+### เรียกแผนที่ 3D กลับมาใช้นำทาง
+
+```bash
+ros2 launch rospider_gazebo vslam.launch.py localization:=true map:=room_vslam
+```
+
+RTAB-Map โหลดแผนที่ 3D ทั้งหมดจากไฟล์ (ภาพ + point cloud) หาตำแหน่งตัวเองโดยเทียบภาพจากกล้องกับแผนที่ แล้วส่งแผนที่ 2D ที่ฉายจากแผนที่ 3D กับตำแหน่งหุ่นให้ Nav2 — กด **2D Goal Pose** ใน RViz เพื่อสั่งเดิน RViz แสดง point cloud 3D ของแผนที่ด้วย
+
+- โหมดนี้ไม่เพิ่มข้อมูลใหม่ลงแผนที่ และไม่ลบไฟล์ (โหมดทำแผนที่ต่างหากที่เริ่มไฟล์ใหม่ทุกครั้ง) แต่ตอนปิดยังเขียนข้อมูลบางส่วนลงไฟล์ — ถ้าต้องการต้นฉบับเดิมให้ copy เก็บไว้ก่อน
+- หาตำแหน่งด้วยกล้อง และ Nav2 หลบสิ่งกีดขวางด้วย depth camera (point cloud ขนาดเล็กที่สร้างจากภาพ depth ราว 2 พันจุด) — เห็นเฉพาะด้านหน้ากล้อง (~69°) ด้านข้างและด้านหลังมองไม่เห็น ต่างจาก LiDAR ที่เห็นรอบตัว
+- ใช้แผนที่จาก `vslam.launch.py` เท่านั้น — แผนที่จาก `rtabmap_slam.launch.py` ให้ใช้กับ `rtabmap_navigation.launch.py`
+
+ข้อจำกัด: หันเข้าหาผนังเรียบหรือใกล้ผนังมาก ภาพจะมี feature น้อยจนต่อแผนที่หรือหาตำแหน่งพลาดง่ายกว่าแบบมี LiDAR และ depth เห็นระยะสั้นกว่า LiDAR (sim ตั้งไว้ 8 ม. แผนที่ 2D ใช้ถึง 5 ม.)
 
 ## 5. Navigation
 
@@ -105,18 +151,56 @@ ros2 run nav2_map_server map_saver_cli -f ~/my_map --ros-args -p use_sim_time:=t
 ros2 launch rospider_gazebo navigation.launch.py
 ```
 
-ใช้แผนที่ `maps/rospider_room.yaml` ที่ทำจากห้อง sim ไว้แล้ว และตั้งตำแหน่งเริ่มต้นให้อัตโนมัติ (หุ่นเกิดที่ origin ของแผนที่) — กด **2D Goal Pose** ใน RViz เพื่อสั่งเดิน หรือ:
+ใช้แผนที่ `rospider_room` ที่ทำจากห้อง sim ไว้แล้ว และตั้งตำแหน่งเริ่มต้นให้อัตโนมัติ (หุ่นเกิดที่ origin ของแผนที่) — กด **2D Goal Pose** ใน RViz เพื่อสั่งเดิน หรือ:
 
 ```bash
 ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
   "{pose: {header: {frame_id: map}, pose: {position: {x: 0.9, y: 0.3}, orientation: {w: 1.0}}}}"
 ```
 
-ใช้แผนที่อื่น: `map:=/abs/path/my_map.yaml` (ถ้าหุ่นไม่ได้เกิดที่ origin ของแผนที่ ให้ตั้งตำแหน่งด้วย **2D Pose Estimate**)
+ใช้แผนที่ของเราเอง: `map:=room1` (แผนที่ 2D ใน `ROSpider/maps/`) — ถ้าหุ่นไม่ได้เกิดที่ origin ของแผนที่ ให้ตั้งตำแหน่งด้วย **2D Pose Estimate**
 
 ความเร็วและ footprint มาจาก config ของหุ่นจริง (`navigation/config`) — สูงสุด 0.05 ม./วิ. หุ่นจึงเดินช้า (เป้าหมายห่าง ~1 ม. ใช้เวลาราว 1 นาที) ต่างจากค่าของ Hiwonder 2 ค่าใน DWB คือ `xy_goal_tolerance` และ `sim_time` เพราะค่าเดิมทำให้หุ่นหยุดก่อนถึงเป้าหมายและ goal ไม่จบ (รายละเอียดที่หัวไฟล์ `src/simulations/rospider_gazebo/config/nav2_params.yaml`)
 
 ลองค่า Nav2 อื่นโดยไม่ต้อง build ใหม่: `params_file:=/abs/path/my_nav2_params.yaml`
+
+## บันทึกและเรียกใช้แผนที่
+
+แผนที่ทุกแบบเก็บไว้ใน workspace ที่ `ROSpider/maps/` ใส่แค่**ชื่อ**ใน `map:=` (ถ้าอยากใช้ไฟล์ที่อื่น ใส่ path ที่มี `/` ได้ เช่น `map:=$HOME/other/room.db`) — ตอนเริ่ม launch จะพิมพ์ path ของแผนที่ออกมาให้เห็น
+
+| แผนที่ | ทำด้วย | เรียกใช้ด้วย |
+|---|---|---|
+| 2D `room1.yaml` + `.pgm` | `map_saver_cli` ระหว่าง `slam` / `rtabmap_slam` / `vslam` | `navigation.launch.py map:=room1` |
+| 3D `room1.db` (กล้อง + LiDAR) | `rtabmap_slam.launch.py map:=room1` | `rtabmap_navigation.launch.py map:=room1` |
+| 3D `vslam/room_vslam.db` (กล้องอย่างเดียว) | `vslam.launch.py map:=room_vslam` | `vslam.launch.py localization:=true map:=room_vslam` |
+
+### แผนที่ 2D (`.yaml` + `.pgm`) — ใช้กับ Nav2 + AMCL (LiDAR)
+
+บันทึกระหว่างที่ launch ทำแผนที่ยังรันอยู่ (ขับให้ทั่วก่อน) — รันจากโฟลเดอร์ `ROSpider`:
+
+```bash
+cd ~/entech_hiwonder_ros2_ws/ROSpider
+ros2 run nav2_map_server map_saver_cli -f maps/room1 --ros-args -p use_sim_time:=true
+```
+
+เรียกใช้:
+
+```bash
+ros2 launch rospider_gazebo navigation.launch.py map:=room1
+```
+
+AMCL ตั้งตำแหน่งเริ่มต้นไว้ที่จุด (0, 0) ของแผนที่ = จุดที่หุ่นเกิดตอนเริ่มทำแผนที่ ถ้าไม่ตรง ให้กด **2D Pose Estimate** ใน RViz
+
+### แผนที่ 3D (`.db`) — RTAB-Map
+
+ขับให้ทั่วแล้วปิด launch ทำแผนที่ด้วย **Ctrl+C** และรอจนขึ้น `Saving database/long-term memory...done!` — ไฟล์ `.db` ถูกเขียนตอนปิดเท่านั้น จากนั้นเรียกใช้ด้วยคำสั่งในตารางด้านบน
+
+- **อย่า copy ไฟล์ `.db` ระหว่างที่ RTAB-Map ยังรันอยู่** ไฟล์ที่ได้จะเสีย (`database disk image is malformed`)
+- ในไฟล์ `.db` มีแผนที่ 2D อยู่ด้วย ถ้าอยากใช้กับ `navigation.launch.py` ให้รันโหมดโหลดแผนที่แล้วสั่ง `map_saver_cli` ตามด้านบน
+
+### git
+
+ไฟล์ `.db` ใหญ่หลายสิบถึงหลายร้อย MB (GitHub รับไฟล์ละไม่เกิน 100 MB) จึงถูก ignore ไว้ใน `ROSpider/.gitignore` — แผนที่ 2D ไฟล์เล็ก commit ได้ตามปกติ ถ้าต้องการแชร์ไฟล์ `.db` ให้ใช้ Git LFS หรือส่งไฟล์แยก
 
 ## 6. MoveIt ใน Gazebo
 

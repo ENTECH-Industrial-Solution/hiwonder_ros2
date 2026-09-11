@@ -1,5 +1,7 @@
 <?xml version="1.0"?>
-<!-- 4 m x 3 m room for ROSpider. Walls are 0.4 m high; the LiDAR scan plane is ~0.15 m above the floor.
+<!-- 4 m x 3 m room for ROSpider. Walls and obstacles carry distinct poster textures (textures/) so the
+     camera has features for visual SLAM (RTAB-Map loop closure). Walls are 1 m high (the camera sits at ~0.37 m);
+     the LiDAR scan plane is ~0.15 m above the floor.
      The robot spawns at the origin facing +x; the three small cubes in front of it are visual-only colour-detection targets
      (no collision: they sit below the LiDAR plane, so Nav2 could not avoid them). -->
 <sdf version="1.9">
@@ -46,16 +48,16 @@
     <model name="walls">
       <static>true</static>
       <link name="link">
-        <collision name="north_c"><pose>0 1.525 0.2 0 0 0</pose><geometry><box><size>4.1 0.05 0.4</size></box></geometry></collision>
-        <visual name="north_v"><pose>0 1.525 0.2 0 0 0</pose><geometry><box><size>4.1 0.05 0.4</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
-        <collision name="south_c"><pose>0 -1.525 0.2 0 0 0</pose><geometry><box><size>4.1 0.05 0.4</size></box></geometry></collision>
-        <visual name="south_v"><pose>0 -1.525 0.2 0 0 0</pose><geometry><box><size>4.1 0.05 0.4</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
-        <collision name="east_c"><pose>2.025 0 0.2 0 0 0</pose><geometry><box><size>0.05 3.0 0.4</size></box></geometry></collision>
-        <visual name="east_v"><pose>2.025 0 0.2 0 0 0</pose><geometry><box><size>0.05 3.0 0.4</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
-        <collision name="west_c"><pose>-2.025 0 0.2 0 0 0</pose><geometry><box><size>0.05 3.0 0.4</size></box></geometry></collision>
-        <visual name="west_v"><pose>-2.025 0 0.2 0 0 0</pose><geometry><box><size>0.05 3.0 0.4</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
-        <collision name="partition_c"><pose>-0.8 0.75 0.2 0 0 0</pose><geometry><box><size>0.05 1.5 0.4</size></box></geometry></collision>
-        <visual name="partition_v"><pose>-0.8 0.75 0.2 0 0 0</pose><geometry><box><size>0.05 1.5 0.4</size></box></geometry><material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material></visual>
+        <collision name="north_c"><pose>0 1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry></collision>
+        <visual name="north_v"><pose>0 1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_north.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+        <collision name="south_c"><pose>0 -1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry></collision>
+        <visual name="south_v"><pose>0 -1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_south.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+        <collision name="east_c"><pose>2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry></collision>
+        <visual name="east_v"><pose>2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_east.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+        <collision name="west_c"><pose>-2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry></collision>
+        <visual name="west_v"><pose>-2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_west.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+        <collision name="partition_c"><pose>-0.8 0.75 0.5 0 0 0</pose><geometry><box><size>0.05 1.5 1.0</size></box></geometry></collision>
+        <visual name="partition_v"><pose>-0.8 0.75 0.5 0 0 0</pose><geometry><box><size>0.05 1.5 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/partition.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
       </link>
     </model>
 
@@ -64,7 +66,7 @@
       <pose>1.2 0.8 0.15 0 0 0.3</pose>
       <link name="link">
         <collision name="c"><geometry><box><size>0.4 0.3 0.3</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.4 0.3 0.3</size></box></geometry><material><ambient>0.55 0.4 0.25 1</ambient><diffuse>0.55 0.4 0.25 1</diffuse></material></visual>
+        <visual name="v"><geometry><box><size>0.4 0.3 0.3</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/box.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
       </link>
     </model>
 
@@ -73,7 +75,7 @@
       <pose>1.0 -0.8 0.15 0 0 0</pose>
       <link name="link">
         <collision name="c"><geometry><cylinder><radius>0.15</radius><length>0.3</length></cylinder></geometry></collision>
-        <visual name="v"><geometry><cylinder><radius>0.15</radius><length>0.3</length></cylinder></geometry><material><ambient>0.3 0.3 0.35 1</ambient><diffuse>0.3 0.3 0.35 1</diffuse></material></visual>
+        <visual name="v"><geometry><cylinder><radius>0.15</radius><length>0.3</length></cylinder></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/cylinder.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
       </link>
     </model>
 
@@ -82,7 +84,7 @@
       <pose>-1.4 -0.9 0.15 0 0 0</pose>
       <link name="link">
         <collision name="c"><geometry><box><size>0.3 0.5 0.3</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.3 0.5 0.3</size></box></geometry><material><ambient>0.25 0.45 0.3 1</ambient><diffuse>0.25 0.45 0.3 1</diffuse></material></visual>
+        <visual name="v"><geometry><box><size>0.3 0.5 0.3</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/crate.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
       </link>
     </model>
 

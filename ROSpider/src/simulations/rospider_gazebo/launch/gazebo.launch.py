@@ -28,7 +28,8 @@ def launch_setup(context):
     # not simulated they add nothing but physics cost -- the sim ran at ~2% real time with them --
     # so only primitive collisions (the skid in rospider_gazebo.urdf.xacro) are kept.
     # Sensors render visuals, so they are unaffected.
-    doc = xacro.process_file(os.path.join(pkg, 'urdf', 'rospider_gazebo.urdf.xacro'))
+    doc = xacro.process_file(os.path.join(pkg, 'urdf', 'rospider_gazebo.urdf.xacro'),
+                             mappings={'arm_pose': LaunchConfiguration('arm_pose').perform(context)})
     for collision in doc.getElementsByTagName('collision'):
         if collision.getElementsByTagName('mesh'):
             collision.parentNode.removeChild(collision)
@@ -83,7 +84,9 @@ def launch_setup(context):
         package='controller_manager',
         executable='spawner',
         output='screen',
-        arguments=['joint_state_broadcaster', 'leg_controller', 'arm_controller', 'gripper_controller'],
+        # Generous timeouts: with RTAB-Map or several sims running, activation can exceed the defaults
+        arguments=['joint_state_broadcaster', 'leg_controller', 'arm_controller', 'gripper_controller',
+                   '--switch-timeout', '30', '--service-call-timeout', '30'],
     )
 
     return [
@@ -101,6 +104,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('world', default_value=os.path.join(pkg, 'worlds', 'rospider_room.sdf')),
         DeclareLaunchArgument('gui', default_value='true', description='Show the Gazebo window'),
+        DeclareLaunchArgument('arm_pose', default_value='init', choices=['init', 'horizontal'],
+                              description='Arm start pose: camera tilted at the floor (init) or level (horizontal)'),
         DeclareLaunchArgument('x', default_value='0.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
         DeclareLaunchArgument('yaw', default_value='0.0'),

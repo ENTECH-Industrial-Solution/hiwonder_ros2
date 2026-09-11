@@ -6,6 +6,7 @@
   pose) and the VelocityControl system moves the body with the same twist.
 -->
 <robot name="rospider" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:arg name="arm_pose" default="init"/>
   <xacro:include filename="$(find rospider_description)/urdf/rospider.xacro"/>
 
   <!-- Frictionless skid at foot level. It carries the robot on the floor (the mesh collisions are
@@ -66,11 +67,13 @@
     <xacro:leg_joints leg="RF"/>
     <xacro:leg_joints leg="RM"/>
     <xacro:leg_joints leg="RR"/>
-    <!-- Arm starts in the real robot's init pose (controller/config/init_pose.yaml, servo ids 19-23) -->
+    <!-- Arm start pose. init: the real robot's init pose (controller/config/init_pose.yaml, servo ids
+         19-23), camera tilted 52 deg down at the floor. horizontal: joint4 levels the camera, like the
+         real robot's init_horizontal action before RTAB-Map. -->
     <xacro:position_joint name="joint1"/>
     <xacro:position_joint name="joint2" initial="0.628"/>
     <xacro:position_joint name="joint3" initial="-1.927"/>
-    <xacro:position_joint name="joint4" initial="-1.194"/>
+    <xacro:position_joint name="joint4" initial="${-0.286 if '$(arg arm_pose)' == 'horizontal' else -1.194}"/>
     <xacro:position_joint name="joint5"/>
     <xacro:position_joint name="r_joint"/>
     <xacro:mimic_joint name="l_joint"/>

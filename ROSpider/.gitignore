@@ -6,3 +6,7 @@ log/
 # Python
 __pycache__/
 *.pyc
+
+# Maps saved by the simulation launch files: RTAB-Map databases are tens to hundreds of MB
+# (GitHub rejects files over 100 MB); 2D maps (.yaml/.pgm) are small and can be committed
+/maps/**/*.db

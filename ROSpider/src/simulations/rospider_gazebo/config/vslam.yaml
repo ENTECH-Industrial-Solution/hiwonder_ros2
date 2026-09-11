@@ -1,0 +1,39 @@
+# RTAB-Map for camera-only V-SLAM (vslam.launch.py): Hiwonder's values from
+# slam/launch/include/rtabmap.launch.py without the LiDAR. The launch file adds use_sim_time,
+# database_path and, for localization:=true, the settings that load the map without changing it.
+rgbd_sync:
+  ros__parameters:
+    approx_sync: true
+    approx_sync_max_interval: 0.008
+    qos: 2
+
+rtabmap:
+  ros__parameters:
+    frame_id: base_footprint
+    subscribe_rgbd: true
+    subscribe_scan: false
+    qos_image: 2
+    sync_queue_size: 50
+    # Otherwise /map is only published when a node is added, so map_saver (2 s timeout) gets nothing
+    # once the robot stands still
+    map_always_update: true
+    Reg/Strategy: "0"             # visual registration (no LiDAR ICP)
+    Reg/Force3DoF: "true"
+    Optimizer/Slam2D: "true"
+    Optimizer/GravitySigma: "0"
+    Vis/MaxFeatures: "2000"
+    Grid/Sensor: "1"              # occupancy grid from the depth image
+    Grid/RangeMin: "0.2"          # the gripper fingers are in view ~0.1 m away
+    Grid/RangeMax: "5.0"
+    Grid/MaxGroundHeight: "0.05"
+    Grid/MaxObstacleHeight: "1.0"
+
+# Nav2's obstacle source in localization mode: a light cloud from the depth image. The camera's own
+# cloud is 640x480 at 15 Hz, and three Nav2 consumers of it starved the planner so goals aborted.
+point_cloud_xyz:
+  ros__parameters:
+    decimation: 4                 # every 4th pixel
+    voxel_size: 0.05
+    min_depth: 0.2                # the gripper fingers are in view ~0.1 m away
+    max_depth: 3.0
+    approx_sync: true
