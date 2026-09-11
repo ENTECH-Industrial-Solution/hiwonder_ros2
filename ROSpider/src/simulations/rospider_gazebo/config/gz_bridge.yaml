@@ -1,0 +1,77 @@
+# Gazebo <-> ROS topics. ROS names match what the real robot publishes, so apps, SLAM and Nav2
+# run unchanged. Gazebo-side names live under /sim and /model/rospider.
+- ros_topic_name: /clock
+  gz_topic_name: /clock
+  ros_type_name: rosgraph_msgs/msg/Clock
+  gz_type_name: gz.msgs.Clock
+  direction: GZ_TO_ROS
+
+- ros_topic_name: /scan
+  gz_topic_name: /sim/scan
+  ros_type_name: sensor_msgs/msg/LaserScan
+  gz_type_name: gz.msgs.LaserScan
+  direction: GZ_TO_ROS
+
+- ros_topic_name: /imu
+  gz_topic_name: /sim/imu
+  ros_type_name: sensor_msgs/msg/Imu
+  gz_type_name: gz.msgs.IMU
+  direction: GZ_TO_ROS
+
+- ros_topic_name: /odom
+  gz_topic_name: /model/rospider/odometry
+  ros_type_name: nav_msgs/msg/Odometry
+  gz_type_name: gz.msgs.Odometry
+  direction: GZ_TO_ROS
+
+- ros_topic_name: /tf
+  gz_topic_name: /model/rospider/tf
+  ros_type_name: tf2_msgs/msg/TFMessage
+  gz_type_name: gz.msgs.Pose_V
+  direction: GZ_TO_ROS
+
+# Body twist from scripts/sim_gait.py, which consumes the robot's command topic /controller/cmd_vel
+# (teleop, apps, Nav2 via collision_monitor.cmd_vel_out_topic) and limits it to what the stride allows.
+# gz-transport allows one bridge entry per Gazebo topic.
+- ros_topic_name: /sim/base_cmd_vel
+  gz_topic_name: /model/rospider/cmd_vel
+  ros_type_name: geometry_msgs/msg/Twist
+  gz_type_name: gz.msgs.Twist
+  direction: ROS_TO_GZ
+
+# Camera topics are lazy: converted only while something subscribes (the point cloud alone
+# costs a lot of bridge CPU and slows the simulation).
+- ros_topic_name: /depth_cam/rgb/image_raw
+  gz_topic_name: /sim/depth_cam/image
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: /depth_cam/rgb/camera_info
+  gz_topic_name: /sim/depth_cam/camera_info
+  ros_type_name: sensor_msgs/msg/CameraInfo
+  gz_type_name: gz.msgs.CameraInfo
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: /depth_cam/depth/image_raw
+  gz_topic_name: /sim/depth_cam/depth_image
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: /depth_cam/depth/camera_info
+  gz_topic_name: /sim/depth_cam/camera_info
+  ros_type_name: sensor_msgs/msg/CameraInfo
+  gz_type_name: gz.msgs.CameraInfo
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: /depth_cam/depth/points
+  gz_topic_name: /sim/depth_cam/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+  lazy: true

@@ -1,0 +1,170 @@
+<?xml version="1.0"?>
+<!--
+  ROSpider for Gazebo Sim: the upstream URDF plus ros2_control, simulated sensors and base motion.
+  The real gait engine (driver/kinematics, aarch64-only binary) cannot run here. Instead
+  scripts/sim_gait.py steps the legs through leg_controller (all leg joints at 0 is the standing
+  pose) and the VelocityControl system moves the body with the same twist.
+-->
+<robot name="rospider" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:include filename="$(find rospider_description)/urdf/rospider.xacro"/>
+
+  <!-- Frictionless skid at foot level. It carries the robot on the floor (the mesh collisions are
+       stripped in gazebo.launch.py) and stops it at walls, while VelocityControl slides it around. -->
+  <link name="sim_skid_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <collision>
+      <geometry>
+        <box size="0.24 0.18 0.02"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="sim_skid_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="sim_skid_link"/>
+    <!-- box bottom at -0.011 m: the feet sit ~0.0107 m below base_footprint in the standing pose -->
+    <origin xyz="0 0 -0.001"/>
+  </joint>
+  <gazebo reference="sim_skid_link">
+    <mu1>0.0</mu1>
+    <mu2>0.0</mu2>
+  </gazebo>
+
+  <xacro:macro name="position_joint" params="name initial:=0.0">
+    <joint name="${name}">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">${initial}</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="leg_joints" params="leg">
+    <xacro:position_joint name="coxa_${leg}_joint"/>
+    <xacro:position_joint name="femur_${leg}_joint"/>
+    <xacro:position_joint name="tibla_${leg}_joint"/>
+  </xacro:macro>
+
+  <!-- Gripper fingers follow r_joint through the <mimic> tags in gripper.urdf.xacro -->
+  <xacro:macro name="mimic_joint" params="name">
+    <joint name="${name}">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <ros2_control name="GazeboSimSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    <xacro:leg_joints leg="LF"/>
+    <xacro:leg_joints leg="LM"/>
+    <xacro:leg_joints leg="LR"/>
+    <xacro:leg_joints leg="RF"/>
+    <xacro:leg_joints leg="RM"/>
+    <xacro:leg_joints leg="RR"/>
+    <!-- Arm starts in the real robot's init pose (controller/config/init_pose.yaml, servo ids 19-23) -->
+    <xacro:position_joint name="joint1"/>
+    <xacro:position_joint name="joint2" initial="0.628"/>
+    <xacro:position_joint name="joint3" initial="-1.927"/>
+    <xacro:position_joint name="joint4" initial="-1.194"/>
+    <xacro:position_joint name="joint5"/>
+    <xacro:position_joint name="r_joint"/>
+    <xacro:mimic_joint name="l_joint"/>
+    <xacro:mimic_joint name="l_in_joint"/>
+    <xacro:mimic_joint name="l_out_joint"/>
+    <xacro:mimic_joint name="r_in_joint"/>
+    <xacro:mimic_joint name="r_out_joint"/>
+  </ros2_control>
+
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find rospider_gazebo)/config/ros2_controllers.yaml</parameters>
+    </plugin>
+    <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+      <topic>/model/rospider/cmd_vel</topic>
+    </plugin>
+    <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+      <odom_topic>/model/rospider/odometry</odom_topic>
+      <tf_topic>/model/rospider/tf</tf_topic>
+      <odom_publish_frequency>30</odom_publish_frequency>
+      <dimensions>2</dimensions>
+    </plugin>
+  </gazebo>
+
+  <!-- LD19-like 2D LiDAR. min range 0.2 m matches the real robot's laser filter
+       (peripherals/config/lidar_filters_config.yaml), which drops hits on the robot's own legs. -->
+  <gazebo reference="lidar_frame">
+    <sensor name="lidar" type="gpu_lidar">
+      <gz_frame_id>lidar_frame</gz_frame_id>
+      <topic>/sim/scan</topic>
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <visualize>false</visualize>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>450</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.2</min>
+          <max>12.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+        <!-- everything except visibility flag 0x2, which gazebo.launch.py puts on the robot's visuals -->
+        <visibility_mask>4294967293</visibility_mask>
+      </lidar>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="imu_link">
+    <sensor name="imu" type="imu">
+      <gz_frame_id>imu_link</gz_frame_id>
+      <topic>/sim/imu</topic>
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+    </sensor>
+  </gazebo>
+
+  <!-- RGB-D camera on the arm (depth_cam_link is x-forward; depth_cam_frame is its optical frame) -->
+  <gazebo reference="depth_cam_link">
+    <sensor name="depth_cam" type="rgbd_camera">
+      <gz_frame_id>depth_cam_frame</gz_frame_id>
+      <topic>/sim/depth_cam</topic>
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <camera>
+        <horizontal_fov>1.2</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>10.0</far>
+        </clip>
+        <depth_camera>
+          <clip>
+            <near>0.15</near>
+            <far>8.0</far>
+          </clip>
+        </depth_camera>
+      </camera>
+    </sensor>
+  </gazebo>
+</robot>

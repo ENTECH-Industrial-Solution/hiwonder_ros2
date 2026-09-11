@@ -1,0 +1,75 @@
+# Controller names match the real robot (driver/servo_controller/config/servo_controller.yaml)
+# and robot_moveit_config/config/moveit_controllers.yaml.
+
+# gz_ros2_control turns position commands into joint velocity = gain * error * update_rate.
+# The default gain (0.1) lags ~0.1 s, too slow for the stepping legs.
+gz_ros_control:
+  ros__parameters:
+    position_proportional_gain: 0.5
+
+controller_manager:
+  ros__parameters:
+    update_rate: 100
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    leg_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    gripper_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+leg_controller:
+  ros__parameters:
+    joints:
+      - coxa_LF_joint
+      - femur_LF_joint
+      - tibla_LF_joint
+      - coxa_LM_joint
+      - femur_LM_joint
+      - tibla_LM_joint
+      - coxa_LR_joint
+      - femur_LR_joint
+      - tibla_LR_joint
+      - coxa_RF_joint
+      - femur_RF_joint
+      - tibla_RF_joint
+      - coxa_RM_joint
+      - femur_RM_joint
+      - tibla_RM_joint
+      - coxa_RR_joint
+      - femur_RR_joint
+      - tibla_RR_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+arm_controller:
+  ros__parameters:
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+gripper_controller:
+  ros__parameters:
+    joints:
+      - r_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
