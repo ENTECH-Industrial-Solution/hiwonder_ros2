@@ -22,8 +22,14 @@ include_directories(
   include
 )
 
+# Prebuilt iFlytek libs ship per architecture (lib/arm64 for Jetson, lib/x64 for PC)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+  set(XF_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/arm64)
+else()
+  set(XF_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/x64)
+endif()
 link_directories(
-  lib/arm64
+  ${XF_LIB_DIR}
 )
 
 # Create the executable target
