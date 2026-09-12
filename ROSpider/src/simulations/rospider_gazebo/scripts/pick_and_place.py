@@ -50,11 +50,17 @@ class PickAndPlaceNode(Node):
         self.pitches = list(p('approach_pitches_deg').value)
         self.approach_distance = float(p('approach_distance').value)
         self.grasp_z_offset = float(p('grasp_z_offset').value)
-        self.release_z_offset = float(p('release_z_offset').value)
-        self.stack_height = float(p('stack_height').value)
         self.gripper_open = float(p('gripper_open').value)
         self.grasp_joint_value = float(p('grasp_joint_value').value)
-        self.drop_point = np.array(p('drop_point').value, dtype=float)
+        # ROS 2 parameters can't hold a list of lists, so drop_slots is
+        # written as nested "slot0/slot1/slot2" parameters in the yaml;
+        # get_parameters_by_prefix returns them keyed by their relative
+        # name, and sorting by key recovers placement order (slot0, slot1,
+        # slot2, ...).
+        slot_params = self.get_parameters_by_prefix('drop_slots')
+        self.drop_slots = [
+            np.array(slot_params[key].value, dtype=float)
+            for key in sorted(slot_params.keys())]
         self.colors = list(p('colors').value)
         self.stable_frames = int(p('stable_frames').value)
         self.joint_tolerance = float(p('joint_tolerance').value)
@@ -63,8 +69,9 @@ class PickAndPlaceNode(Node):
         self.state_timeout = float(p('state_timeout').value)
         self.depth_window = int(p('depth_window_px').value)
 
-        # drop_point arrives in base_footprint; arm_ik works in base_link.
-        self.drop_point[2] -= arm_ik.BASE_LINK_HEIGHT
+        # drop_slots arrive in base_footprint; arm_ik works in base_link.
+        for slot in self.drop_slots:
+            slot[2] -= arm_ik.BASE_LINK_HEIGHT
 
         self.state = State.IDLE
         self.state_entered = self.get_clock().now()
@@ -386,22 +393,23 @@ class PickAndPlaceNode(Node):
 
     def _on_lift(self):
         if self.arrived():
-            # All three colours share one drop_point, so from the second cube
-            # on there is already a cube sitting there. Releasing at a fixed
-            # height (empirically, drop_point.z + release_z_offset -- only
-            # ~5 mm above one resting cube's top) drove each new cube's
-            # gripper straight into the previous one: full-demo testing
-            # showed this cascade knock cubes clean off the pedestal (one
-            # colour ended up 16 cm from the marker, on the floor -- see
-            # task-6-report.md). Releasing placed_count cube-heights higher
-            # each time targets the current top of the stack instead, so
-            # cubes land on top of each other rather than colliding.
-            drop = self.drop_point.copy()
-            drop[2] += self.placed_count * self.stack_height
-            drop[2] += self.release_z_offset
+            # Fix round 2: a stacked third release is not reachable with a
+            # steep approach at all (the arm's 2R sub-chain is too short to
+            # back off from shoulder height -- see config/pick_place.yaml),
+            # so each cube now goes into its own ground-level slot instead of
+            # on top of the previous one. placed_count indexes drop_slots in
+            # placement order, same role stack_height's multiplier used to
+            # play.
+            if self.placed_count >= len(self.drop_slots):
+                self.get_logger().error(
+                    f'placed_count {self.placed_count} has no drop slot '
+                    f'(only {len(self.drop_slots)} configured); stopping')
+                self.enter(State.DONE)
+                return
+            drop = self.drop_slots[self.placed_count].copy()
             plan = self.plan_for(drop)
             if plan is None:
-                self.abandon('drop point unreachable')
+                self.abandon('drop slot unreachable')
                 return
             self.plan = plan
             self.send_arm(plan.approach)

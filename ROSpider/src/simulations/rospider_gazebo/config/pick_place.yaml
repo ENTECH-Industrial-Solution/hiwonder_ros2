@@ -40,23 +40,47 @@ pick_and_place:
     # limitation, and 8 mm on a 5 cm cube with a message-fired weld (no
     # collision geometry on the hand; see gazebo.launch.py) is immaterial.
     grasp_z_offset: -0.0141
-    release_z_offset: 0.03
 
     gripper_open: 0.5066        # rospider.srdf group_state "open"
     grasp_joint_value: 0.1      # partial close: the weld holds the cube, so a
                                 # full close would just penetrate it
 
-    # Drop point in base_footprint; converted to base_link once at startup.
-    drop_point: [0.160, 0.0, 0.105]
-
-    # All three colours share drop_point, so the 2nd and 3rd cubes land on
-    # top of the ones already there. stack_height (the cube's own 0.05 m
-    # side) is added, once per already-placed cube, to the release height so
-    # each new cube is lowered onto the CURRENT top of the stack rather than
-    # into the cube already resting at drop_point.z -- releasing at the same
-    # fixed height every time collided the incoming cube with the previous
-    # one and knocked cubes clean off the pedestal (see task-6-report.md).
-    stack_height: 0.05
+    # Fix round 2: a THIRD stacked cube cannot be placed with a steep
+    # approach at all -- the arm is physically too short. At the third
+    # stacked release height (0.235 m, base_footprint -- essentially
+    # shoulder height), backing off 0.04 m along a vertical tool axis needs
+    # a 2R sub-chain reach of 0.1629 m, and L1+L2 = 0.160563 m is the hard
+    # ceiling; nothing steeper than 60 deg solves at all, and even 50 deg
+    # (10.4 deg margin) has to sweep the held cube sideways THROUGH the two
+    # cubes already stacked to get there -- exactly the 15-20 cm scatter
+    # failure this round exists to fix. So this is a side-by-side ROW, not
+    # a stack: three slots at the same, ground-level height with different
+    # y, each independently reachable with the same healthy margin (each
+    # slot solves at 80/90/80 deg with ~14 deg margin -- see
+    # task-6-report.md, Fix round 2).
+    #
+    # Each slot is in base_footprint, [x, y, z], keyed by placement order
+    # (slot0 first, slot1 second, slot2 third -- read via
+    # get_parameters_by_prefix('drop_slots') and sorted by key, since ROS 2
+    # parameters cannot hold a list of lists -- "slotN: [x, y, z]" is the
+    # supported nested-parameter equivalent). Converted to base_link once at
+    # startup, same as the old drop_point was. 0.07 m y-spacing leaves a
+    # 2 cm gap between neighbouring 0.05 m cubes, so a vertical descent into
+    # one slot cannot touch the cube in the slot next to it.
+    #
+    # z = 0.135 m is the COMMANDED RELEASE HEIGHT, not the cube's resting
+    # centre (0.105 m): it already has the old release_z_offset (0.03 m)
+    # baked in, i.e. z = rest_centre(0.105) + old_release_gap(0.03). The
+    # node does NOT add any further release offset on top of this number --
+    # doing so would be exactly the double-application of one physical
+    # correction across two config values that Fix round 1 (Finding 1) had
+    # to undo for grasp_z_offset. The cube is released 0.03 m above its
+    # slot and falls the rest of the way, same physical behaviour as
+    # before, just at a fixed per-slot height instead of a stacked one.
+    drop_slots:
+      slot0: [0.160, 0.07, 0.135]
+      slot1: [0.160, 0.0, 0.135]
+      slot2: [0.160, -0.07, 0.135]
 
     colors: ['red', 'green', 'blue']
     stable_frames: 5

@@ -65,21 +65,19 @@ _RAW_LOCALIZED_Z_FOOTPRINT = 0.1191
 GRASP_Z = (_RAW_LOCALIZED_Z_FOOTPRINT + _PARAMS['grasp_z_offset']
            - arm_ik.BASE_LINK_HEIGHT)
 
-# The three stacked release heights the node actually commands in LOWER:
-# drop_point.z + placed_count * stack_height + release_z_offset, for
-# placed_count = 0, 1, 2 (the first, second and third cube released at the
-# marker) -- exactly as _on_lift computes `drop`. Test/guard against a
-# regression like Finding 2, where a timeout could silently skip incrementing
-# placed_count and a later release would collide with the cube already
-# there.
-_DROP_X, _DROP_Y, _DROP_Z = _PARAMS['drop_point']
-_STACK_HEIGHT = _PARAMS['stack_height']
-_RELEASE_Z_OFFSET = _PARAMS['release_z_offset']
-RELEASE_POINTS = {
-    f'release_n{n}': (_DROP_X, _DROP_Y,
-                      _DROP_Z + n * _STACK_HEIGHT + _RELEASE_Z_OFFSET
-                      - arm_ik.BASE_LINK_HEIGHT)
-    for n in range(3)
+# Fix round 2: a third STACKED release is not reachable at all (see
+# config/pick_place.yaml) -- the arm's 2R sub-chain is too short to back off
+# from shoulder height -- so the three cubes now go into a side-by-side row
+# of ground-level drop_slots instead. Each slot's z is already the commanded
+# release height (the old release_z_offset is baked in, not added again --
+# see the config comment), so the only conversion needed here is
+# base_footprint -> base_link, exactly as _on_lift computes `drop`.
+# get_parameters_by_prefix isn't in play here (this test reads the yaml
+# directly via PyYAML, not through rclpy), so drop_slots comes back as a
+# plain nested dict; sorting by key recovers placement order.
+DROP_POINTS = {
+    name: (x, y, z - arm_ik.BASE_LINK_HEIGHT)
+    for name, (x, y, z) in sorted(_PARAMS['drop_slots'].items())
 }
 
 
@@ -126,21 +124,22 @@ def test_solutions_respect_joint_limits():
 
 
 def test_scene_layout_is_graspable():
-    # Spec section 7 test 5: cover every cube AND the drop point at the
-    # heights the node actually commands -- the three cube grasps at
-    # GRASP_Z (not the plain cube-centre CUBE_Z the node no longer targets
-    # directly, though the two are numerically close by design of the
-    # grasp_z_offset fix) and the three stacked release points, rather than
-    # only a single shared height that guards none of what LOWER commands.
+    # Spec section 7 test 5: cover every cube AND every drop slot at the
+    # poses the node actually commands -- the three cube grasps at GRASP_Z
+    # (not the plain cube-centre CUBE_Z the node no longer targets directly,
+    # though the two are numerically close by design of the grasp_z_offset
+    # fix) and the three row drop_slots (Fix round 2), rather than the
+    # stacked release heights that no longer exist -- a third stacked
+    # release isn't solvable by any pitch at all (see
+    # config/pick_place.yaml), which is exactly why the row replaced it.
     points = {name: (x, y, GRASP_Z) for name, (x, y) in LAYOUT.items()
               if name != 'drop'}
-    points.update(RELEASE_POINTS)
+    points.update(DROP_POINTS)
     for name, point in points.items():
         plan = arm_ik.plan_grasp(point, PITCHES, back_off=0.04)
         assert plan is not None, f'{name} has no workable approach'
-        # Do not loosen this for release_n2: it sits close to the 10 deg
-        # threshold (~10.4 deg margin) by construction of the third stacked
-        # release height, and that closeness is exactly what this assertion
-        # is meant to guard.
+        # The 10 deg margin gate is not loosened for any slot: the row was
+        # chosen precisely because every slot clears it with a healthy
+        # margin (~14 deg), unlike the stacked arrangement it replaced.
         assert plan.margin > math.radians(10.0), (
             f'{name} sits {math.degrees(plan.margin):.1f} deg from a joint limit')
