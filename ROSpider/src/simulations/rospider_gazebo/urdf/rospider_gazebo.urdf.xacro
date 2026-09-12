@@ -57,6 +57,24 @@
     </joint>
   </xacro:macro>
 
+  <!-- Grasping is a joint attachment, not friction: the gripper is small, has
+       five mimic fingers and would drop a 5 cm cube. parent_link must be link5
+       because gripper_joint and end_effector_joint are fixed, so sdformat lumps
+       gripper_link and end_effector_link into link5. child_model is fixed at
+       load time, hence one plugin per cube. suppress_child_warning is needed
+       because pick_place.launch.py spawns the cubes after the robot. -->
+  <xacro:macro name="grasp_joint" params="colour">
+    <plugin filename="gz-sim-detachable-joint-system"
+            name="gz::sim::systems::DetachableJoint">
+      <parent_link>link5</parent_link>
+      <child_model>pick_cube_${colour}</child_model>
+      <child_link>link</child_link>
+      <attach_topic>/grasp/${colour}/attach</attach_topic>
+      <detach_topic>/grasp/${colour}/detach</detach_topic>
+      <suppress_child_warning>true</suppress_child_warning>
+    </plugin>
+  </xacro:macro>
+
   <ros2_control name="GazeboSimSystem" type="system">
     <hardware>
       <plugin>gz_ros2_control/GazeboSimSystem</plugin>
@@ -98,6 +116,9 @@
       <odom_publish_frequency>30</odom_publish_frequency>
       <dimensions>2</dimensions>
     </plugin>
+    <xacro:grasp_joint colour="red"/>
+    <xacro:grasp_joint colour="green"/>
+    <xacro:grasp_joint colour="blue"/>
   </gazebo>
 
   <!-- LD19-like 2D LiDAR. min range 0.2 m matches the real robot's laser filter

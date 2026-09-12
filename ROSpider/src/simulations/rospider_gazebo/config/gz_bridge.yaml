@@ -75,3 +75,41 @@
   gz_type_name: gz.msgs.PointCloudPacked
   direction: GZ_TO_ROS
   lazy: true
+
+# Grasping: pick_and_place.py welds a cube to link5 and releases it again. See
+# the DetachableJoint plugins in urdf/rospider_gazebo.urdf.xacro.
+- ros_topic_name: /grasp/red/attach
+  gz_topic_name: /grasp/red/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /grasp/red/detach
+  gz_topic_name: /grasp/red/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /grasp/green/attach
+  gz_topic_name: /grasp/green/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /grasp/green/detach
+  gz_topic_name: /grasp/green/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /grasp/blue/attach
+  gz_topic_name: /grasp/blue/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /grasp/blue/detach
+  gz_topic_name: /grasp/blue/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
