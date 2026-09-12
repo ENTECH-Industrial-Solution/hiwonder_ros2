@@ -1,0 +1,56 @@
+pick_and_place:
+  ros__parameters:
+    # Look pose: joint4 is tuned so the three cubes land inside the image
+    # rather than at the bottom edge as they do at joint4=-1.194. -1.35 (the
+    # brief's original value) still clips the CENTRE (green) cube's box at
+    # y2=480: red/blue (offset +-0.07 in y) clear the frame at -1.35, but
+    # green (y=0, dead ahead of the camera) does not, confirmed against live
+    # /yolo/object_detect output -- see task-6-report.md. -1.55 clears green
+    # (y2=441, 39 px of margin) while keeping red/blue comfortably inside the
+    # frame (y in [110,261]).
+    look_pose: [0.0, 0.628, -1.927, -1.55, 0.0]
+
+    # Every pitch is evaluated; the one whose grasp and pre-grasp have the
+    # largest joint-limit margin wins. See spec section 4.3.
+    approach_pitches_deg: [90.0, 80.0, 70.0, 60.0, 50.0, 40.0, 30.0]
+    approach_distance: 0.04
+
+    # Offsets along base_link z. The detector sees the cube's top face, so the
+    # grasp offset is negative to reach the middle of a 0.05 m cube.
+    #
+    # -0.025 (the brief's original value) undershoots by a further, highly
+    # repeatable 0.0141 m: at look_pose's steep, close (~0.16-0.2 m) viewing
+    # geometry, the box-centroid + 5x5-window depth sample lands on the
+    # cube's near top edge rather than its true top-face centre, biasing the
+    # raw localize() point high by ~1.4 cm in z -- identical to 3 decimal
+    # places across red/green/blue and across two different look_pose values
+    # (see task-6-report.md, Step-4 verification). -0.0391 (-0.025 - 0.0141)
+    # was tuned against that measured bias so the logged, offset point lands
+    # within Step 4's 1 cm ground-truth tolerance for all three colours.
+    grasp_z_offset: -0.0391
+    release_z_offset: 0.03
+
+    gripper_open: 0.5066        # rospider.srdf group_state "open"
+    grasp_joint_value: 0.1      # partial close: the weld holds the cube, so a
+                                # full close would just penetrate it
+
+    # Drop point in base_footprint; converted to base_link once at startup.
+    drop_point: [0.160, 0.0, 0.105]
+
+    # All three colours share drop_point, so the 2nd and 3rd cubes land on
+    # top of the ones already there. stack_height (the cube's own 0.05 m
+    # side) is added, once per already-placed cube, to the release height so
+    # each new cube is lowered onto the CURRENT top of the stack rather than
+    # into the cube already resting at drop_point.z -- releasing at the same
+    # fixed height every time collided the incoming cube with the previous
+    # one and knocked cubes clean off the pedestal (see task-6-report.md).
+    stack_height: 0.05
+
+    colors: ['red', 'green', 'blue']
+    stable_frames: 5
+    joint_tolerance: 0.02
+    move_duration: 2.0
+    settle_time: 1.0
+    state_timeout: 15.0
+    depth_window_px: 5
+    auto_start: true
