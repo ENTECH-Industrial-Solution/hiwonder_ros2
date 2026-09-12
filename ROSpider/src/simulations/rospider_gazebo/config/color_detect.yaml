@@ -1,0 +1,27 @@
+# HSV bounds for the simulated cubes. OpenCV hue is 0-179. Red wraps the hue
+# origin, so it carries two ranges that are OR-ed together.
+color_detect:
+  ros__parameters:
+    # 8000, not the original 300: on this dev machine the rgbd_camera's RGB
+    # image (not its depth image) carries a same-colour "ghost" patch of each
+    # cube at the top of the frame, ~65x70 px (bbox area ~4500-4800 px^2),
+    # with no matching geometry -- its depth-channel pixels read the same as
+    # the background wall, so it is a colour-buffer render artifact, not a
+    # second object. It is reproducible with a single clean gzserver/gzclient
+    # (no leftover processes) and coincides with the "libEGL ... driver
+    # (null)" warnings this machine already logs on Gazebo startup (see
+    # CLAUDE.md: NVIDIA/EGL driver mismatch). The real cube, seen close-up by
+    # the arm-mounted camera, has bbox area >= ~13000 px^2 at the brief's
+    # predicted pose. 8000 sits between the two with margin on both sides.
+    min_area_px: 8000
+    kernel_px: 5
+    colors: ['red', 'green', 'blue']
+    red:
+      lower: [0, 120, 80, 170, 120, 80]
+      upper: [10, 255, 255, 179, 255, 255]
+    green:
+      lower: [40, 100, 60]
+      upper: [85, 255, 255]
+    blue:
+      lower: [95, 120, 60]
+      upper: [130, 255, 255]

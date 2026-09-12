@@ -47,6 +47,15 @@ def generate_launch_description():
         for name, pose in SCENE
     ]
 
+    detector = Node(
+        package='rospider_gazebo',
+        executable='color_detect.py',
+        name='color_detect',
+        output='screen',
+        parameters=[os.path.join(pkg, 'config', 'color_detect.yaml'),
+                    {'use_sim_time': True}],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'world',
@@ -56,5 +65,5 @@ def generate_launch_description():
         gazebo,
         # The robot and its controllers need to exist before the cubes land on
         # the pedestal, or they drop through a world that is still loading.
-        TimerAction(period=5.0, actions=spawns),
+        TimerAction(period=5.0, actions=spawns + [detector]),
     ])
