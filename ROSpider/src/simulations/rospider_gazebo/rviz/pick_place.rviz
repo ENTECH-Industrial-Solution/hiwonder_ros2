@@ -1,0 +1,576 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /Image1
+        - /RobotModel1
+        - /RobotModel1/Description Topic1
+      Splitter Ratio: 0.5
+    Tree Height: 616
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Tool Properties
+    Expanded:
+      - /2D Goal Pose1
+      - /Publish Point1
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: rviz_common/Time
+    Experimental: false
+    Name: Time
+    SyncMode: 0
+    SyncSource: ""
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /color_detect/image_result
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_connect_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        coxa_LF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        coxa_LM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        coxa_LR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        coxa_RF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        coxa_RM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        coxa_RR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        depth_cam_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        depth_cam_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        end_LF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        end_LM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        end_LR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        end_RF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        end_RM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        end_RR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        end_effector_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        femur_LF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        femur_LM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        femur_LR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        femur_RF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        femur_RM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        femur_RR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gripper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        imu_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        l_in_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        l_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        l_out_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        leg_center_LF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        leg_center_LM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        leg_center_LR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        leg_center_RF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        leg_center_RM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        leg_center_RR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        lidar_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        lidar_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link4:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link5:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        r_in_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        r_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        r_out_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        sim_skid_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tibla_LF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tibla_LM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tibla_LR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tibla_RF:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tibla_RM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tibla_RR:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: RobotModel
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        camera_connect_link:
+          Value: true
+        coxa_LF:
+          Value: true
+        coxa_LM:
+          Value: true
+        coxa_LR:
+          Value: true
+        coxa_RF:
+          Value: true
+        coxa_RM:
+          Value: true
+        coxa_RR:
+          Value: true
+        depth_cam_frame:
+          Value: true
+        depth_cam_link:
+          Value: true
+        end_LF:
+          Value: true
+        end_LM:
+          Value: true
+        end_LR:
+          Value: true
+        end_RF:
+          Value: true
+        end_RM:
+          Value: true
+        end_RR:
+          Value: true
+        end_effector_link:
+          Value: true
+        femur_LF:
+          Value: true
+        femur_LM:
+          Value: true
+        femur_LR:
+          Value: true
+        femur_RF:
+          Value: true
+        femur_RM:
+          Value: true
+        femur_RR:
+          Value: true
+        gripper_link:
+          Value: true
+        imu_link:
+          Value: true
+        l_in_link:
+          Value: true
+        l_link:
+          Value: true
+        l_out_link:
+          Value: true
+        leg_center_LF:
+          Value: true
+        leg_center_LM:
+          Value: true
+        leg_center_LR:
+          Value: true
+        leg_center_RF:
+          Value: true
+        leg_center_RM:
+          Value: true
+        leg_center_RR:
+          Value: true
+        lidar_frame:
+          Value: true
+        lidar_link:
+          Value: true
+        link1:
+          Value: true
+        link2:
+          Value: true
+        link3:
+          Value: true
+        link4:
+          Value: true
+        link5:
+          Value: true
+        odom:
+          Value: true
+        r_in_link:
+          Value: true
+        r_link:
+          Value: true
+        r_out_link:
+          Value: true
+        sim_skid_link:
+          Value: true
+        tibla_LF:
+          Value: true
+        tibla_LM:
+          Value: true
+        tibla_LR:
+          Value: true
+        tibla_RF:
+          Value: true
+        tibla_RM:
+          Value: true
+        tibla_RR:
+          Value: true
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: false
+      Tree:
+        base_footprint:
+          base_link:
+            imu_link:
+              {}
+            leg_center_LF:
+              {}
+            leg_center_LM:
+              {}
+            leg_center_LR:
+              {}
+            leg_center_RF:
+              {}
+            leg_center_RM:
+              {}
+            leg_center_RR:
+              {}
+            lidar_link:
+              lidar_frame:
+                {}
+          sim_skid_link:
+            {}
+      Update Interval: 0
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_footprint
+    Frame Rate: 60
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+    - Class: rviz_default_plugins/SetInitialPose
+      Covariance x: 0.25
+      Covariance y: 0.25
+      Covariance yaw: 0.06853891909122467
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+    - Class: rviz_default_plugins/PublishPoint
+      Single click: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /clicked_point
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.319338321685791
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: -0.5532707571983337
+        Y: -0.5827667117118835
+        Z: -0.5767549276351929
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.6539397239685059
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
+      Yaw: 0.6625095009803772
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 1131
+  Hide Left Dock: false
+  Hide Right Dock: true
+  Image:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000029d000003c9fc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005d00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003f000002f6000000cc00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0049006d006100670065010000033b000000cd0000001700ffffff000000010000010f000002a5fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003f000002a5000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073e0000003efc0100000002fb0000000800540069006d006501000000000000073e0000026f00fffffffb0000000800540069006d006501000000000000045000000000000000000000049b000003c900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Selection:
+    collapsed: false
+  Time:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: true
+  Width: 1854
+  X: 66
+  Y: 32

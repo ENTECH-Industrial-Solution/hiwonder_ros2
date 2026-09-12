@@ -91,7 +91,7 @@ ros2 launch navigation navigation.launch.py map:=map_01
 ## Simulation (PC, no hardware)
 
 The user-facing how-to, in Thai, is `ROSpider/SIMULATION.md`. Entry points:
-- `ros2 launch rospider_gazebo {gazebo,slam,rtabmap_slam,vslam,navigation,rtabmap_navigation,moveit}.launch.py`
+- `ros2 launch rospider_gazebo {gazebo,slam,rtabmap_slam,vslam,navigation,rtabmap_navigation,moveit,pick_place}.launch.py`
 - URDF viewer: `rospider_description display.launch.py`, which needs `need_compile=True`
 - MoveIt on mock hardware: `robot_moveit_config demo.launch.py`
 
@@ -142,6 +142,7 @@ The user-facing how-to, in Thai, is `ROSpider/SIMULATION.md`. Entry points:
   - The controller names match `servo_controller` and MoveIt.
   - The SRDF names its virtual-joint parent frame `world_feame` (misspelled), so `moveit.launch.py` publishes a static TF `world_feame→odom`.
 - **Headless mode.** `gui:=false` needs working EGL. On the dev PC, EGL tries the NVIDIA card first and fails while the NVIDIA driver is mismatched.
+- **Pick and place (`pick_place.launch.py`).** Not MoveIt: `robot_moveit_config` sets `position_only_ik: true`, which can't constrain grasp orientation, so the pick path uses its own closed-form IK instead. Grasping is a `DetachableJoint` weld on `link5`, not friction — and Gazebo forms that weld the instant the cube spawns, before any node commands it, so the node must publish a detach at startup or the first arm move drags the whole scene. The pedestal and cubes are spawned at run time rather than added to `rospider_room.sdf`, so that world file keeps backing `maps/rospider_room.*` and Nav2's AMCL initial pose. The three drop slots sit in a row, not stacked: at stacking height the arm has no steep-approach solution left, and the only shallow ones sweep the held cube through the cubes already placed.
 
 Local patches to upstream packages, all needed for Jazzy/x86:
 - `xf_mic_asr_offline/CMakeLists.txt`: picks the lib folder by CPU architecture (see above).

@@ -71,6 +71,14 @@ def generate_launch_description():
                          LaunchConfiguration('auto_start'), value_type=bool)}],
     )
 
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        output='log',
+        arguments=['-d', os.path.join(pkg, 'rviz', 'pick_place.rviz')],
+        parameters=[{'use_sim_time': True}],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'world',
@@ -80,5 +88,5 @@ def generate_launch_description():
         gazebo,
         # The robot and its controllers need to exist before the cubes land on
         # the pedestal, or they drop through a world that is still loading.
-        TimerAction(period=5.0, actions=spawns + [detector, picker]),
+        TimerAction(period=5.0, actions=spawns + [detector, picker, rviz]),
     ])
