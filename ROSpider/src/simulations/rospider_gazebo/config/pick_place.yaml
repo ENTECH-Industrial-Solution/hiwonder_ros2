@@ -1,0 +1,128 @@
+pick_and_place:
+  ros__parameters:
+    # Look pose: joint4 is tuned so the three pedestal cubes land inside the
+    # image rather than at the bottom edge as they do at joint4=-1.194.
+    # joint4=-1.55 is verified against the real pedestal spawn poses
+    # (x=0.235) to put all three cubes fully in frame with a single box
+    # each -- live /yolo/object_detect at this pose, pristine scene:
+    #   red   box [69, 110, 234, 262]
+    #   green box [257, 110, 390, 262]
+    #   blue  box [411, 110, 578, 262]
+    # (u in [69, 578], v in [110, 262] of a 640x480 image) -- comfortable
+    # margin on every side, well clear of the depth sensor's 0.15 m near
+    # clip.
+    #
+    # -1.35 (the brief's original value) ALSO works: green (the cube dead
+    # ahead of the camera, so the closest and lowest in frame) sits at
+    # v = [226, 376], well clear of both edges, and -1.35 would additionally
+    # bring the decorative cubes at x=0.55 back into frame (they are above
+    # the frame entirely at -1.55; see SIMULATION.md's pick-and-place
+    # verification section). An earlier measurement on this branch reported
+    # green clipping the bottom edge at -1.35 (task-6-report.md) -- that
+    # measurement was wrong: it modelled a cube left over in the drop zone
+    # from an earlier run in the same session (~(0.165, 0, 0.080) in
+    # base_footprint), not the pedestal spawn pose (0.235, 0, 0.105). See the
+    # correction note appended to task-6-report.md.
+    #
+    # -1.55 is kept, not reverted to -1.35, because grasp_z_offset below was
+    # calibrated at -1.55: the raw-point bias it corrects is pose-dependent,
+    # so changing the look pose now would reopen that calibration for no
+    # actual gain.
+    look_pose: [0.0, 0.628, -1.927, -1.55, 0.0]
+
+    # Every pitch is evaluated; the one whose grasp and pre-grasp have the
+    # largest joint-limit margin wins. See spec section 4.3.
+    approach_pitches_deg: [90.0, 80.0, 70.0, 60.0, 50.0, 40.0, 30.0]
+    approach_distance: 0.04
+
+    # Offset along base_link z, applied to the raw point localize() returns.
+    #
+    # The raw sampled point is NOT the cube's top-face centre: at look_pose's
+    # steep (~72.4 deg down), close (~0.16-0.2 m) viewing geometry, the
+    # cube's silhouette covers its top face plus a foreshortened front face,
+    # so the box-centroid + 5x5-window depth sample lands on the cube's near
+    # top EDGE -- about 0.0109 m below the true top face, and about 0.008 m
+    # nearer in x (the top-face-centre is set back from the near edge along
+    # the viewing direction). This is stable to 3 decimal places across
+    # red/green/blue and across two different look_pose values (see
+    # task-6-report.md, Fix round 1).
+    #
+    # The intent (unchanged) is to command the tool point to the cube's
+    # CENTRE, 0.105 m in base_footprint (cube is 0.05 m: bottom 0.080, centre
+    # 0.105, top 0.130). Raw z measures ~0.1191 m in base_footprint, so the
+    # offset is 0.105 - 0.1191 = -0.0141, not the earlier (wrong) -0.0391,
+    # which doubled the near-edge correction and drove the tool to z=0.080 --
+    # the cube's bottom face / the pedestal's top surface.
+    #
+    # The residual ~8 mm x bias from the same near-edge effect is NOT
+    # corrected here (deliberately -- see Finding 1 of the review that fixed
+    # this): a second pose-dependent fudge factor is worse than a named
+    # limitation, and 8 mm on a 5 cm cube with a message-fired weld (no
+    # collision geometry on the hand; see gazebo.launch.py) is immaterial.
+    grasp_z_offset: -0.0141
+
+    gripper_open: 0.5066        # rospider.srdf group_state "open"
+    grasp_joint_value: 0.1      # partial close: the weld holds the cube, so a
+                                # full close would just penetrate it
+
+    # Fix round 2: a THIRD stacked cube cannot be placed with a steep
+    # approach at all -- the arm is physically too short. At the third
+    # stacked release height (0.235 m, base_footprint -- essentially
+    # shoulder height), backing off 0.04 m along a vertical tool axis needs
+    # a 2R sub-chain reach of 0.1629 m, and L1+L2 = 0.160563 m is the hard
+    # ceiling; nothing steeper than 60 deg solves at all, and even 50 deg
+    # (10.4 deg margin) has to sweep the held cube sideways THROUGH the two
+    # cubes already stacked to get there -- exactly the 15-20 cm scatter
+    # failure this round exists to fix. So this is a side-by-side ROW, not
+    # a stack: three slots at the same, ground-level height with different
+    # y, each independently reachable with the same healthy margin (each
+    # slot solves at 80/90/80 deg with ~14 deg margin -- see
+    # task-6-report.md, Fix round 2).
+    #
+    # Each slot is in base_footprint, [x, y, z], keyed by placement order
+    # (slot0 first, slot1 second, slot2 third -- read via
+    # get_parameters_by_prefix('drop_slots') and sorted by key, since ROS 2
+    # parameters cannot hold a list of lists -- "slotN: [x, y, z]" is the
+    # supported nested-parameter equivalent). Converted to base_link once at
+    # startup, same as the old drop_point was. 0.07 m y-spacing leaves a
+    # 2 cm gap between neighbouring 0.05 m cubes, so a vertical descent into
+    # one slot cannot touch the cube in the slot next to it.
+    #
+    # z = 0.135 m is the COMMANDED RELEASE HEIGHT, not the cube's resting
+    # centre (0.105 m): it already has the old release_z_offset (0.03 m)
+    # baked in, i.e. z = rest_centre(0.105) + old_release_gap(0.03). The
+    # node does NOT add any further release offset on top of this number --
+    # doing so would be exactly the double-application of one physical
+    # correction across two config values that Fix round 1 (Finding 1) had
+    # to undo for grasp_z_offset. The cube is released 0.03 m above its
+    # slot and falls the rest of the way, same physical behaviour as
+    # before, just at a fixed per-slot height instead of a stacked one.
+    drop_slots:
+      slot0: [0.160, 0.07, 0.135]
+      slot1: [0.160, 0.0, 0.135]
+      slot2: [0.160, -0.07, 0.135]
+
+    colors: ['red', 'green', 'blue']
+    stable_frames: 5
+    joint_tolerance: 0.02
+    move_duration: 2.0
+    settle_time: 1.0
+    state_timeout: 15.0
+    depth_window_px: 5
+    auto_start: true
+
+    # The object layout used to spawn the scene (spec section 4.4): model
+    # name -> [x, y, z] spawn pose, in the world frame with the robot at the
+    # origin, so this is also base_footprint coordinates -- see spec section
+    # 5.1. This is the single source of truth for the layout: both
+    # launch/pick_place.launch.py (which spawns these models with
+    # `ros_gz_sim create`) and test/test_arm_ik.py's
+    # test_scene_layout_is_graspable (which checks every cube stays inside
+    # the arm's reach) read it from here, so a moved object or a launch file
+    # edited out of step with the test is no longer possible.
+    scene:
+      pick_pedestal: [0.200, 0.0, 0.040]
+      pick_cube_red: [0.235, 0.07, 0.105]
+      pick_cube_green: [0.235, 0.0, 0.105]
+      pick_cube_blue: [0.235, -0.07, 0.105]
+      drop_marker: [0.160, 0.0, 0.082]

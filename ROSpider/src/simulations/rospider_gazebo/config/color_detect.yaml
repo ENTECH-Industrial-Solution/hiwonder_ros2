@@ -1,0 +1,29 @@
+# HSV bounds for the simulated cubes. OpenCV hue is 0-179. Red wraps the hue
+# origin, so it carries two ranges that are OR-ed together.
+color_detect:
+  ros__parameters:
+    # 300: each colour mask matches TWO real objects, not one. The world
+    # (worlds/rospider_room.sdf) has permanent, static, visual-only decorative
+    # cubes named red_cube/green_cube/blue_cube at x=0.55 (0.55, +-0.12/0, 0.025),
+    # whose <ambient>/<diffuse> are byte-for-byte the same colour as the
+    # graspable pick_cube_{red,green,blue} at x=0.235. So every colour mask
+    # legitimately has a near, large blob (the graspable cube) and a far,
+    # small blob (the decorative one) -- this is not a rendering artefact and
+    # is not dev-machine-specific; it reproduces on the Jetson too. A fixed
+    # area threshold can't robustly separate them across camera poses (this
+    # node is 2D-only by design, with no depth, so a future look-pose change
+    # shifts both blobs' apparent size together). Selection between same-
+    # colour blobs is left to the consumer (Task 6: largest box per colour,
+    # confirmed reachable by IK) -- see the multi-blob warning below.
+    min_area_px: 300
+    kernel_px: 5
+    colors: ['red', 'green', 'blue']
+    red:
+      lower: [0, 120, 80, 170, 120, 80]
+      upper: [10, 255, 255, 179, 255, 255]
+    green:
+      lower: [40, 100, 60]
+      upper: [85, 255, 255]
+    blue:
+      lower: [95, 120, 60]
+      upper: [130, 255, 255]
