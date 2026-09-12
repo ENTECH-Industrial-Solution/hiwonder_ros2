@@ -13,4 +13,12 @@ install(PROGRAMS scripts/sim_gait.py
 # rospider_gazebo.maps: map name -> <workspace>/maps path, used by the launch files
 ament_python_install_package(${PROJECT_NAME})
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  # APPEND_ENV puts the package source on PYTHONPATH so `from rospider_gazebo
+  # import arm_ik` resolves without depending on the install space being sourced.
+  ament_add_pytest_test(test_arm_ik test/test_arm_ik.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
 ament_package()
