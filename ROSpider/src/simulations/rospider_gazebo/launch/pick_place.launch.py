@@ -1,5 +1,6 @@
 import os
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
@@ -8,21 +9,24 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
-# Objects are spawned at run time rather than written into rospider_room.sdf:
-# that world backs maps/rospider_room.* and the Nav2 demo's AMCL initial pose.
-# Poses are in the world frame with the robot at the origin, so they are also
-# base_footprint coordinates. See spec section 5.1.
-SCENE = (
-    ('pick_pedestal', (0.200, 0.0, 0.040)),
-    ('pick_cube_red', (0.235, 0.07, 0.105)),
-    ('pick_cube_green', (0.235, 0.0, 0.105)),
-    ('pick_cube_blue', (0.235, -0.07, 0.105)),
-    ('drop_marker', (0.160, 0.0, 0.082)),
-)
-
 
 def generate_launch_description():
     pkg = get_package_share_directory('rospider_gazebo')
+    pick_place_config = os.path.join(pkg, 'config', 'pick_place.yaml')
+
+    # Objects are spawned at run time rather than written into
+    # rospider_room.sdf: that world backs maps/rospider_room.* and the Nav2
+    # demo's AMCL initial pose. Poses are in the world frame with the robot
+    # at the origin, so they are also base_footprint coordinates. See spec
+    # section 5.1.
+    #
+    # Read from pick_place.yaml's `scene`, not hardcoded here, so this file
+    # and test/test_arm_ik.py's test_scene_layout_is_graspable share one
+    # source of truth for the layout (spec section 4.4) -- a moved object is
+    # then caught by the test instead of silently drifting out of step.
+    with open(pick_place_config) as f:
+        scene_params = yaml.safe_load(f)['pick_and_place']['ros__parameters']['scene']
+    SCENE = tuple(scene_params.items())
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'gazebo.launch.py')),
@@ -62,7 +66,7 @@ def generate_launch_description():
         executable='pick_and_place.py',
         name='pick_and_place',
         output='screen',
-        parameters=[os.path.join(pkg, 'config', 'pick_place.yaml'),
+        parameters=[pick_place_config,
                     {'use_sim_time': True,
                      # LaunchConfiguration is always a string; without this
                      # wrapper the node receives auto_start:="false" as the

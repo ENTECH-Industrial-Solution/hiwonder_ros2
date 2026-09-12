@@ -28,15 +28,6 @@ def test_constants_match_the_urdf():
         'joint1', 'joint2', 'joint3', 'joint4', 'joint5')
 
 
-CUBE_Z = 0.105 - arm_ik.BASE_LINK_HEIGHT      # cube centre, base_link frame
-PITCHES = (90.0, 80.0, 70.0, 60.0, 50.0, 40.0, 30.0)
-LAYOUT = {                                    # spec section 5.1
-    'red': (0.235, 0.07),
-    'green': (0.235, 0.0),
-    'blue': (0.235, -0.07),
-    'drop': (0.160, 0.0),
-}
-
 _CONFIG_PATH = Path(__file__).resolve().parent.parent / 'config' / 'pick_place.yaml'
 
 
@@ -46,6 +37,26 @@ def _load_pick_place_params():
 
 
 _PARAMS = _load_pick_place_params()
+
+CUBE_Z = 0.105 - arm_ik.BASE_LINK_HEIGHT      # cube centre, base_link frame
+
+# Read from config/pick_place.yaml rather than hardcoded, so this test
+# actually guards what spec section 7.5 assigned it: it must fail if someone
+# shortens the pitch list or the back-off distance, not only if they move an
+# object out of the workspace.
+PITCHES = tuple(_PARAMS['approach_pitches_deg'])
+BACK_OFF = float(_PARAMS['approach_distance'])
+
+# Cube layout, keyed by colour, read from pick_place.yaml's `scene` (model
+# name -> [x, y, z] spawn pose) -- the same source of truth
+# launch/pick_place.launch.py spawns the models from -- rather than a
+# hardcoded LAYOUT constant that could silently drift out of step with it.
+# See spec section 4.4 and the config's `scene` comment.
+LAYOUT = {
+    name[len('pick_cube_'):]: (x, y)
+    for name, (x, y, _z) in _PARAMS['scene'].items()
+    if name.startswith('pick_cube_')
+}
 
 # The raw point localize() reports for a cube on the pedestal, in
 # base_footprint, before grasp_z_offset is applied. This is a property of the
@@ -132,11 +143,10 @@ def test_scene_layout_is_graspable():
     # stacked release heights that no longer exist -- a third stacked
     # release isn't solvable by any pitch at all (see
     # config/pick_place.yaml), which is exactly why the row replaced it.
-    points = {name: (x, y, GRASP_Z) for name, (x, y) in LAYOUT.items()
-              if name != 'drop'}
+    points = {name: (x, y, GRASP_Z) for name, (x, y) in LAYOUT.items()}
     points.update(DROP_POINTS)
     for name, point in points.items():
-        plan = arm_ik.plan_grasp(point, PITCHES, back_off=0.04)
+        plan = arm_ik.plan_grasp(point, PITCHES, back_off=BACK_OFF)
         assert plan is not None, f'{name} has no workable approach'
         # The 10 deg margin gate is not loosened for any slot: the row was
         # chosen precisely because every slot clears it with a healthy

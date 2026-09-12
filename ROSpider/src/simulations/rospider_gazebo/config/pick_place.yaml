@@ -1,13 +1,33 @@
 pick_and_place:
   ros__parameters:
-    # Look pose: joint4 is tuned so the three cubes land inside the image
-    # rather than at the bottom edge as they do at joint4=-1.194. -1.35 (the
-    # brief's original value) still clips the CENTRE (green) cube's box at
-    # y2=480: red/blue (offset +-0.07 in y) clear the frame at -1.35, but
-    # green (y=0, dead ahead of the camera) does not, confirmed against live
-    # /yolo/object_detect output -- see task-6-report.md. -1.55 clears green
-    # (y2=441, 39 px of margin) while keeping red/blue comfortably inside the
-    # frame (y in [110,261]).
+    # Look pose: joint4 is tuned so the three pedestal cubes land inside the
+    # image rather than at the bottom edge as they do at joint4=-1.194.
+    # joint4=-1.55 is verified against the real pedestal spawn poses
+    # (x=0.235) to put all three cubes fully in frame with a single box
+    # each -- live /yolo/object_detect at this pose, pristine scene:
+    #   red   box [69, 110, 234, 262]
+    #   green box [257, 110, 390, 262]
+    #   blue  box [411, 110, 578, 262]
+    # (u in [69, 578], v in [110, 262] of a 640x480 image) -- comfortable
+    # margin on every side, well clear of the depth sensor's 0.15 m near
+    # clip.
+    #
+    # -1.35 (the brief's original value) ALSO works: green (the cube dead
+    # ahead of the camera, so the closest and lowest in frame) sits at
+    # v = [226, 376], well clear of both edges, and -1.35 would additionally
+    # bring the decorative cubes at x=0.55 back into frame (they are above
+    # the frame entirely at -1.55; see SIMULATION.md's pick-and-place
+    # verification section). An earlier measurement on this branch reported
+    # green clipping the bottom edge at -1.35 (task-6-report.md) -- that
+    # measurement was wrong: it modelled a cube left over in the drop zone
+    # from an earlier run in the same session (~(0.165, 0, 0.080) in
+    # base_footprint), not the pedestal spawn pose (0.235, 0, 0.105). See the
+    # correction note appended to task-6-report.md.
+    #
+    # -1.55 is kept, not reverted to -1.35, because grasp_z_offset below was
+    # calibrated at -1.55: the raw-point bias it corrects is pose-dependent,
+    # so changing the look pose now would reopen that calibration for no
+    # actual gain.
     look_pose: [0.0, 0.628, -1.927, -1.55, 0.0]
 
     # Every pitch is evaluated; the one whose grasp and pre-grasp have the
@@ -90,3 +110,19 @@ pick_and_place:
     state_timeout: 15.0
     depth_window_px: 5
     auto_start: true
+
+    # The object layout used to spawn the scene (spec section 4.4): model
+    # name -> [x, y, z] spawn pose, in the world frame with the robot at the
+    # origin, so this is also base_footprint coordinates -- see spec section
+    # 5.1. This is the single source of truth for the layout: both
+    # launch/pick_place.launch.py (which spawns these models with
+    # `ros_gz_sim create`) and test/test_arm_ik.py's
+    # test_scene_layout_is_graspable (which checks every cube stays inside
+    # the arm's reach) read it from here, so a moved object or a launch file
+    # edited out of step with the test is no longer possible.
+    scene:
+      pick_pedestal: [0.200, 0.0, 0.040]
+      pick_cube_red: [0.235, 0.07, 0.105]
+      pick_cube_green: [0.235, 0.0, 0.105]
+      pick_cube_blue: [0.235, -0.07, 0.105]
+      drop_marker: [0.160, 0.0, 0.082]

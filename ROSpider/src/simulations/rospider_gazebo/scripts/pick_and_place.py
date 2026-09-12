@@ -23,6 +23,39 @@ from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 
+# A few consecutive misses, not a single one: LOOK already required
+# stable_frames consecutive detections before latching onto a colour, so one
+# dropped ObjectsInfo message right after the LOOK -> LOCALIZE transition
+# should not throw the whole colour away.
+_LOCALIZE_MISS_LIMIT = 3
+
+
+def _box_centroid_and_area(box):
+    """Pixel centroid (u, v) and area of a detector box, or None if `box` is
+    neither shape ObjectInfo.box can legally take.
+
+    Hiwonder's own competition/yolo_node.py (around line 135) publishes an
+    8-number box -- the four (x, y) corners of an oriented box -- whenever
+    the underlying YOLO model runs OBB, and its own consumer,
+    competition/pick_and_place.py (around lines 796-798), averages those four
+    corners for the centroid. `box` is an unbounded int32[], so reading it as
+    a 4-number [x1, y1, x2, y2] box would silently compute the midpoint of
+    two corners instead of the true centre. The spec's swappability promise
+    -- a real YOLO node can replace color_detect.py without touching this
+    file -- is only true if both conventions are handled here.
+    """
+    if len(box) == 4:
+        x1, y1, x2, y2 = box
+        return (x1 + x2) / 2.0, (y1 + y2) / 2.0, abs(x2 - x1) * abs(y2 - y1)
+    if len(box) == 8:
+        xs = box[0::2]
+        ys = box[1::2]
+        u = sum(xs) / 4.0
+        v = sum(ys) / 4.0
+        return u, v, (max(xs) - min(xs)) * (max(ys) - min(ys))
+    return None
+
+
 class State(Enum):
     IDLE = 'IDLE'
     LOOK = 'LOOK'
@@ -82,6 +115,8 @@ class PickAndPlaceNode(Node):
         self.placed_count = 0
         self.detections = []
         self.streak = 0
+        self.localize_misses = 0
+        self._look_commanded = False
         self.joint_state = {}
         self.depth_image = None
         self.intrinsics = None
@@ -119,12 +154,26 @@ class PickAndPlaceNode(Node):
         # dropped before discovery completes, so a single release_all() here
         # in __init__ is a no-op. Instead, fire it repeatedly on a timer and
         # hold the node in IDLE -- never commanding the arm -- until the
-        # sequence has actually run. Firings are counted rather than timed
-        # off the clock because use_sim_time is true and /clock may not have
-        # started ticking yet when this constructor runs.
-        self._startup_firings = 0
-        self._startup_total = 6   # ~3 s at 0.5 s/firing
+        # sequence has actually run.
+        #
+        # Leaving IDLE is gated on observable state (all five arm joints
+        # present in /joint_states), not on a fixed firing count. A fixed
+        # count fails two ways: (a) gz-sim's DetachableJoint only subscribes
+        # to its detach topic once it has found its child model and created
+        # the joint, gz-transport does not latch, and a detach published
+        # before a slow-spawning cube's subscriber exists is silently
+        # dropped -- so firing until the node actually leaves IDLE, rather
+        # than for a fixed ~3 s, makes this self-correcting for any spawn
+        # delay; and (b) if the timer stopped and commanded the arm before
+        # arm_controller had actually activated, the one-shot look-pose
+        # publish in _on_look would go nowhere and every colour would time
+        # out (this happened once during implementation, see
+        # task-6-report.md's final-fix correction note).
         self._startup_done = False
+        self._startup_warned = False
+        self._startup_firings = 0
+        self._startup_started = self.get_clock().now()
+        self._startup_deadline_s = 30.0   # generous: normally ready in ~5 s
         self._pending_colors = list(self.colors) if bool(p('auto_start').value) else None
         self.startup_timer = self.create_timer(0.5, self._startup_tick)
 
@@ -135,15 +184,32 @@ class PickAndPlaceNode(Node):
     def _startup_tick(self):
         self.release_all()
         self._startup_firings += 1
-        if self._startup_firings >= self._startup_total:
-            self.startup_timer.cancel()
-            self._startup_done = True
-            self.get_logger().info(
-                f'startup detach complete ({self._startup_firings} firings); '
-                'ready to command the arm')
-            if self._pending_colors is not None:
-                self._begin_now(self._pending_colors)
-                self._pending_colors = None
+        if not all(name in self.joint_state for name in arm_ik.JOINT_NAMES):
+            elapsed = (self.get_clock().now()
+                       - self._startup_started).nanoseconds * 1e-9
+            # Not logged every firing (that would spam at 2 Hz for however
+            # long a slow spawn takes) but the firing count in the eventual
+            # "ready" log, and this loud one-shot warning if a real problem
+            # is dragging startup out, are the evidence that this is still
+            # retrying rather than having silently given up.
+            if elapsed > self._startup_deadline_s and not self._startup_warned:
+                self._startup_warned = True
+                self.get_logger().error(
+                    f'arm joints not seen in /joint_states after '
+                    f'{elapsed:.0f} s ({self._startup_firings} detach '
+                    'firings so far) -- arm_controller may not be active. '
+                    'Still detaching every 0.5 s and waiting; the arm will '
+                    'not be commanded until the joints appear.')
+            return
+        self.startup_timer.cancel()
+        self._startup_done = True
+        self.get_logger().info(
+            f'arm joints present in /joint_states after '
+            f'{self._startup_firings} startup detach firings; ready to '
+            'command the arm')
+        if self._pending_colors is not None:
+            self._begin_now(self._pending_colors)
+            self._pending_colors = None
 
     # ---------------------------------------------------------------- inputs
 
@@ -196,14 +262,18 @@ class PickAndPlaceNode(Node):
 
     def _begin_now(self, colors):
         # A /start mid-carry (or auto_start racing a leftover pending run)
-        # must not carry whatever cube is currently welded into the new run,
-        # and a fresh run must not inherit the previous run's stack height --
-        # releasing straight at n=3 leaves only ~7.2 deg of joint-limit
-        # margin (Finding 3).
+        # must not carry whatever cube is currently welded into the new run.
         self.release_all()
         self.send_gripper(self.gripper_open)
         self.target_color = None
-        self.placed_count = 0
+        # A fresh run must not inherit the previous run's stack height --
+        # releasing straight at n=3 leaves only ~7.2 deg of joint-limit
+        # margin (Finding 3) -- but only when this request actually starts a
+        # new row. A single-colour /start (e.g. retrying one colour after a
+        # timeout) must NOT reset placed_count: that would re-target slot0,
+        # which may already hold a cube placed earlier in this same run.
+        if set(colors) == set(self.colors):
+            self.placed_count = 0
         self.remaining = list(colors)
         self.enter(State.LOOK)
 
@@ -212,6 +282,11 @@ class PickAndPlaceNode(Node):
         self.state = state
         self.state_entered = self.get_clock().now()
         self.streak = 0
+        self.localize_misses = 0
+        # Only meaningful for LOOK (see _on_look), reset unconditionally here
+        # so every entry into LOOK -- including a re-entry after a timeout or
+        # an abandoned colour -- gets exactly one fresh look-pose publish.
+        self._look_commanded = False
 
     def elapsed(self):
         return (self.get_clock().now() - self.state_entered).nanoseconds * 1e-9
@@ -260,12 +335,12 @@ class PickAndPlaceNode(Node):
         self.target_color = None
         self.enter(State.LOOK)
 
-    def localize(self, box):
-        """Box centroid + depth -> a point in base_link, or None."""
+    def localize(self, u, v):
+        """Pixel centroid + depth -> a point in base_link, or None."""
         if self.depth_image is None or self.intrinsics is None:
             return None
-        u = int((box[0] + box[2]) / 2)
-        v = int((box[1] + box[3]) / 2)
+        u = int(u)
+        v = int(v)
         half = self.depth_window // 2
         patch = self.depth_image[max(0, v - half):v + half + 1,
                                  max(0, u - half):u + half + 1]
@@ -314,11 +389,24 @@ class PickAndPlaceNode(Node):
             self.enter(State.DONE)
             return
 
-        # Publish once, not every tick: a joint_trajectory_controller restarts
-        # the trajectory on each message, so republishing at 10 Hz would keep
-        # the arm perpetually 2 s from its goal and arrived() would never hold.
-        if self.goal is None or not np.array_equal(self.goal, self.look_pose):
+        # Publish once per entry into LOOK, not every tick, and not merely
+        # when self.goal differs from look_pose: send_arm() records the goal
+        # regardless of whether arm_controller actually acted on it, so if
+        # the very first publish went out before the controller finished
+        # activating, comparing against the stored goal would suppress every
+        # resend forever -- this happened once during implementation (every
+        # colour timed out because the arm never reached the look pose; see
+        # task-6-report.md's final-fix correction note). enter() resets
+        # _look_commanded on every transition into LOOK, including a
+        # re-entry after a timeout or an abandoned colour, so this is a
+        # publish-once-per-entry guard rather than a publish-once-ever guard.
+        # It still only fires once per entry: a joint_trajectory_controller
+        # restarts the trajectory on each message, so republishing at 10 Hz
+        # would keep the arm perpetually 2 s from its goal and arrived()
+        # would never hold.
+        if not self._look_commanded:
             self.send_arm(self.look_pose)
+            self._look_commanded = True
 
         wanted = self.remaining[0]
         # Checked before arrived(), so a stuck arm gives up instead of hanging.
@@ -342,13 +430,30 @@ class PickAndPlaceNode(Node):
         # cube on the pedestal (near, large) and a same-coloured decorative
         # cube further away (small) -- see config/color_detect.yaml. Take the
         # box with the largest area, not the first match, or half the time
-        # this reaches for a decoration bolted to the world.
-        boxes = [b for name, b in self.detections if name == self.target_color]
-        if not boxes:
+        # this reaches for a decoration bolted to the world. _box_centroid_
+        # and_area() also copes with an 8-number OBB box, which Hiwonder's
+        # own yolo_node.py can publish (see its docstring).
+        candidates = []
+        for name, box in self.detections:
+            if name != self.target_color:
+                continue
+            parsed = _box_centroid_and_area(box)
+            if parsed is None:
+                self.get_logger().warn(
+                    f'{self.target_color}: box of length {len(box)} is '
+                    'neither a 4-number [x1,y1,x2,y2] nor an 8-number OBB '
+                    'corner box; skipping this detection')
+                continue
+            candidates.append(parsed)
+        if not candidates:
+            self.localize_misses += 1
+            if self.localize_misses < _LOCALIZE_MISS_LIMIT:
+                return
             self.abandon('lost the target')
             return
-        box = max(boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
-        point = self.localize(box)
+        self.localize_misses = 0
+        u, v, _area = max(candidates, key=lambda c: c[2])
+        point = self.localize(u, v)
         if point is None:
             self.abandon('no usable depth')
             return
@@ -403,7 +508,14 @@ class PickAndPlaceNode(Node):
             if self.placed_count >= len(self.drop_slots):
                 self.get_logger().error(
                     f'placed_count {self.placed_count} has no drop slot '
-                    f'(only {len(self.drop_slots)} configured); stopping')
+                    f'(only {len(self.drop_slots)} configured); releasing '
+                    'the held cube and stopping')
+                # Otherwise this is the last remaining path that could leave
+                # a cube welded to link5 forever: DONE returns immediately
+                # from tick(), so nothing else would ever detach or open the
+                # gripper.
+                self.release_all()
+                self.send_gripper(self.gripper_open)
                 self.enter(State.DONE)
                 return
             drop = self.drop_slots[self.placed_count].copy()
