@@ -4,7 +4,7 @@ project(rospider_gazebo)
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 
-install(DIRECTORY config launch maps rviz urdf worlds
+install(DIRECTORY config launch maps models rviz urdf worlds
   DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS scripts/sim_gait.py
