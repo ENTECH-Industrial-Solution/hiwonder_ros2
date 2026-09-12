@@ -15,19 +15,31 @@ pick_and_place:
     approach_pitches_deg: [90.0, 80.0, 70.0, 60.0, 50.0, 40.0, 30.0]
     approach_distance: 0.04
 
-    # Offsets along base_link z. The detector sees the cube's top face, so the
-    # grasp offset is negative to reach the middle of a 0.05 m cube.
+    # Offset along base_link z, applied to the raw point localize() returns.
     #
-    # -0.025 (the brief's original value) undershoots by a further, highly
-    # repeatable 0.0141 m: at look_pose's steep, close (~0.16-0.2 m) viewing
-    # geometry, the box-centroid + 5x5-window depth sample lands on the
-    # cube's near top edge rather than its true top-face centre, biasing the
-    # raw localize() point high by ~1.4 cm in z -- identical to 3 decimal
-    # places across red/green/blue and across two different look_pose values
-    # (see task-6-report.md, Step-4 verification). -0.0391 (-0.025 - 0.0141)
-    # was tuned against that measured bias so the logged, offset point lands
-    # within Step 4's 1 cm ground-truth tolerance for all three colours.
-    grasp_z_offset: -0.0391
+    # The raw sampled point is NOT the cube's top-face centre: at look_pose's
+    # steep (~72.4 deg down), close (~0.16-0.2 m) viewing geometry, the
+    # cube's silhouette covers its top face plus a foreshortened front face,
+    # so the box-centroid + 5x5-window depth sample lands on the cube's near
+    # top EDGE -- about 0.0109 m below the true top face, and about 0.008 m
+    # nearer in x (the top-face-centre is set back from the near edge along
+    # the viewing direction). This is stable to 3 decimal places across
+    # red/green/blue and across two different look_pose values (see
+    # task-6-report.md, Fix round 1).
+    #
+    # The intent (unchanged) is to command the tool point to the cube's
+    # CENTRE, 0.105 m in base_footprint (cube is 0.05 m: bottom 0.080, centre
+    # 0.105, top 0.130). Raw z measures ~0.1191 m in base_footprint, so the
+    # offset is 0.105 - 0.1191 = -0.0141, not the earlier (wrong) -0.0391,
+    # which doubled the near-edge correction and drove the tool to z=0.080 --
+    # the cube's bottom face / the pedestal's top surface.
+    #
+    # The residual ~8 mm x bias from the same near-edge effect is NOT
+    # corrected here (deliberately -- see Finding 1 of the review that fixed
+    # this): a second pose-dependent fudge factor is worse than a named
+    # limitation, and 8 mm on a 5 cm cube with a message-fired weld (no
+    # collision geometry on the hand; see gazebo.launch.py) is immaterial.
+    grasp_z_offset: -0.0141
     release_z_offset: 0.03
 
     gripper_open: 0.5066        # rospider.srdf group_state "open"

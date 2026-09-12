@@ -1,6 +1,8 @@
 import math
+from pathlib import Path
 
 import numpy as np
+import yaml
 
 from rospider_gazebo import arm_ik
 
@@ -33,6 +35,51 @@ LAYOUT = {                                    # spec section 5.1
     'green': (0.235, 0.0),
     'blue': (0.235, -0.07),
     'drop': (0.160, 0.0),
+}
+
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / 'config' / 'pick_place.yaml'
+
+
+def _load_pick_place_params():
+    with open(_CONFIG_PATH) as f:
+        return yaml.safe_load(f)['pick_and_place']['ros__parameters']
+
+
+_PARAMS = _load_pick_place_params()
+
+# The raw point localize() reports for a cube on the pedestal, in
+# base_footprint, before grasp_z_offset is applied. This is a property of the
+# camera/cube geometry at look_pose, not a config value, so it can't be read
+# out of pick_place.yaml -- it is measured empirically and is stable to 3
+# decimal places across colour and across look_pose (see
+# config/pick_place.yaml's grasp_z_offset comment and task-6-report.md, Fix
+# round 1 verification).
+_RAW_LOCALIZED_Z_FOOTPRINT = 0.1191
+
+# The height the node actually commands a grasp descent to, in base_link:
+# the raw point above plus the configured grasp_z_offset, exactly as
+# _on_localize computes it (point[2] += self.grasp_z_offset). This currently
+# lands within 9e-5 m of the cube's geometric centre (0.105 m, base_footprint)
+# because grasp_z_offset was tuned to cancel the raw bias -- see Finding 1 --
+# but the formula tracks pick_place.yaml rather than hardcoding 0.105.
+GRASP_Z = (_RAW_LOCALIZED_Z_FOOTPRINT + _PARAMS['grasp_z_offset']
+           - arm_ik.BASE_LINK_HEIGHT)
+
+# The three stacked release heights the node actually commands in LOWER:
+# drop_point.z + placed_count * stack_height + release_z_offset, for
+# placed_count = 0, 1, 2 (the first, second and third cube released at the
+# marker) -- exactly as _on_lift computes `drop`. Test/guard against a
+# regression like Finding 2, where a timeout could silently skip incrementing
+# placed_count and a later release would collide with the cube already
+# there.
+_DROP_X, _DROP_Y, _DROP_Z = _PARAMS['drop_point']
+_STACK_HEIGHT = _PARAMS['stack_height']
+_RELEASE_Z_OFFSET = _PARAMS['release_z_offset']
+RELEASE_POINTS = {
+    f'release_n{n}': (_DROP_X, _DROP_Y,
+                      _DROP_Z + n * _STACK_HEIGHT + _RELEASE_Z_OFFSET
+                      - arm_ik.BASE_LINK_HEIGHT)
+    for n in range(3)
 }
 
 
@@ -79,8 +126,21 @@ def test_solutions_respect_joint_limits():
 
 
 def test_scene_layout_is_graspable():
-    for name, (x, y) in LAYOUT.items():
-        plan = arm_ik.plan_grasp((x, y, CUBE_Z), PITCHES, back_off=0.04)
+    # Spec section 7 test 5: cover every cube AND the drop point at the
+    # heights the node actually commands -- the three cube grasps at
+    # GRASP_Z (not the plain cube-centre CUBE_Z the node no longer targets
+    # directly, though the two are numerically close by design of the
+    # grasp_z_offset fix) and the three stacked release points, rather than
+    # only a single shared height that guards none of what LOWER commands.
+    points = {name: (x, y, GRASP_Z) for name, (x, y) in LAYOUT.items()
+              if name != 'drop'}
+    points.update(RELEASE_POINTS)
+    for name, point in points.items():
+        plan = arm_ik.plan_grasp(point, PITCHES, back_off=0.04)
         assert plan is not None, f'{name} has no workable approach'
+        # Do not loosen this for release_n2: it sits close to the 10 deg
+        # threshold (~10.4 deg margin) by construction of the third stacked
+        # release height, and that closeness is exactly what this assertion
+        # is meant to guard.
         assert plan.margin > math.radians(10.0), (
             f'{name} sits {math.degrees(plan.margin):.1f} deg from a joint limit')

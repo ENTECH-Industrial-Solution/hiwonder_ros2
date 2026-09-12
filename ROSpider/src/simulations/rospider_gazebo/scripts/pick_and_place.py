@@ -71,7 +71,6 @@ class PickAndPlaceNode(Node):
         self.goal = None
         self.target_color = None
         self.plan = None
-        self.latched = None
         self.remaining = list(self.colors)
         self.placed_count = 0
         self.detections = []
@@ -164,8 +163,14 @@ class PickAndPlaceNode(Node):
         return response
 
     def stop_callback(self, _request, response):
+        # Without this, a /stop called between DESCEND and LOWER leaves the
+        # cube welded to link5 forever -- tick() returns immediately once in
+        # DONE, so nothing ever detaches it or opens the gripper (Finding 3).
         self.remaining = []
         self._pending_colors = None
+        self.release_all()
+        self.send_gripper(self.gripper_open)
+        self.target_color = None
         self.enter(State.DONE)
         response.success = True
         response.message = 'stopped'
@@ -183,6 +188,15 @@ class PickAndPlaceNode(Node):
         self._begin_now(colors)
 
     def _begin_now(self, colors):
+        # A /start mid-carry (or auto_start racing a leftover pending run)
+        # must not carry whatever cube is currently welded into the new run,
+        # and a fresh run must not inherit the previous run's stack height --
+        # releasing straight at n=3 leaves only ~7.2 deg of joint-limit
+        # margin (Finding 3).
+        self.release_all()
+        self.send_gripper(self.gripper_open)
+        self.target_color = None
+        self.placed_count = 0
         self.remaining = list(colors)
         self.enter(State.LOOK)
 
@@ -331,6 +345,12 @@ class PickAndPlaceNode(Node):
         if point is None:
             self.abandon('no usable depth')
             return
+        # Logged separately from the offset-applied point below so the raw
+        # value can be checked against ground truth without grasp_z_offset
+        # in the loop -- a check against the post-offset point can never
+        # catch an error in the offset itself (see Finding 1).
+        self.get_logger().info(
+            f'{self.target_color} raw {np.round(point, 3)}')
         point[2] += self.grasp_z_offset
         plan = self.plan_for(point)
         if plan is None:
@@ -339,7 +359,6 @@ class PickAndPlaceNode(Node):
             # one). Skip this colour rather than reaching for a decoration.
             self.abandon(f'unreachable at {np.round(point, 3)}')
             return
-        self.latched = point
         self.plan = plan
         self.get_logger().info(
             f'{self.target_color} at {np.round(point, 3)} '
@@ -397,6 +416,13 @@ class PickAndPlaceNode(Node):
         if self.arrived():
             self.detach_pubs[self.target_color].publish(Empty())
             self.send_gripper(self.gripper_open)
+            # Counted here, where the cube actually leaves the hand, not in
+            # _on_retreat: if RELEASE or RETREAT times out, tick() calls
+            # abandon() (which never touches placed_count), and the cube is
+            # physically on the stack but uncounted -- the next release then
+            # lands one cube-height too low, straight into the one just
+            # placed (Finding 2).
+            self.placed_count += 1
             self.enter(State.RELEASE)
 
     def _on_release(self):
@@ -406,7 +432,6 @@ class PickAndPlaceNode(Node):
 
     def _on_retreat(self):
         if self.arrived():
-            self.placed_count += 1
             self.get_logger().info(f'{self.target_color} placed')
             if self.target_color in self.remaining:
                 self.remaining.remove(self.target_color)
