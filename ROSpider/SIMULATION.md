@@ -277,3 +277,4 @@ export ROS_DOMAIN_ID=11 GZ_PARTITION=sim11
 - **`slam.launch.py` / `navigation.launch.py` ของ package `slam` / `navigation` (Hiwonder) ใช้กับ sim ไม่ได้** แม้มี `sim:=true` เพราะยังเปิด driver ของหุ่นจริง และเขียนไว้สำหรับ ROS 2 Humble — ใช้ของ `rospider_gazebo` แทน
 - **node ที่ต้องใช้ `controller` / `kinematics` ของ Hiwonder** (เช่น self balancing, body control, perform actions) รันบน PC ไม่ได้ เพราะต้องใช้ `kinematics.so` ของ ARM
 - ขาและแขนใน sim ไม่มี collision (ตัดออกเพื่อให้ physics เร็ว) — ขาทะลุสิ่งกีดขวางได้ ตัวหุ่นชนกำแพงผ่านกล่อง collision ใต้ลำตัว
+
