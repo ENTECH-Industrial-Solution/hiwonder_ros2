@@ -48,6 +48,14 @@ class ColorDetectNode(Node):
             f'watching for {sorted(self.ranges)} on /depth_cam/rgb/image_raw')
 
     def image_callback(self, msg):
+        try:
+            self._process_image(msg)
+        except Exception:
+            self.get_logger().error(
+                'image_callback failed on this frame; skipping it',
+                exc_info=True)
+
+    def _process_image(self, msg):
         frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         height, width = frame.shape[:2]
@@ -63,9 +71,11 @@ class ColorDetectNode(Node):
 
             contours, _ = cv2.findContours(
                 mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            survivors = 0
             for contour in contours:
                 if cv2.contourArea(contour) < self.min_area:
                     continue
+                survivors += 1
                 x, y, w, h = cv2.boundingRect(contour)
                 info = ObjectInfo()
                 info.class_name = color
@@ -81,8 +91,39 @@ class ColorDetectNode(Node):
                 cv2.putText(frame, color, (x, max(0, y - 6)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, DRAW_BGR[color], 1)
 
+            if survivors > 1:
+                # Expected: the world has a same-coloured decorative cube
+                # behind each graspable one (see config/color_detect.yaml).
+                # This node is intentionally 2D-only and does not pick a
+                # winner; whoever consumes /yolo/object_detect must select
+                # among same-colour boxes (e.g. largest-area + reachability).
+                self.get_logger().warn(
+                    f'{survivors} {color} blobs above min_area_px '
+                    '(expected: the graspable cube plus its same-colour '
+                    'decorative twin further away)',
+                    throttle_duration_sec=5.0)
+
         self.objects_pub.publish(result)
-        self.image_pub.publish(self.bridge.cv2_to_imgmsg(frame, 'bgr8'))
+        self.image_pub.publish(self._to_image_msg(frame, msg.header))
+
+    def _to_image_msg(self, frame, header):
+        # Built by hand instead of cv_bridge.cv2_to_imgmsg: on this dev
+        # machine a pip-installed opencv-python (5.0.0) shadows the apt
+        # OpenCV that cv_bridge's C++ extension was compiled against, so
+        # cv2_to_imgmsg raises KeyError: 16 while looking up the encoding's
+        # numpy dtype from the wrong module's constants. imgmsg_to_cv2 (used
+        # above, for the incoming image) is unaffected. A contiguous bgr8
+        # frame needs no cv_bridge machinery to serialize, so build it here
+        # instead of depending on the shadowed cv2 import resolving right.
+        img_msg = Image()
+        img_msg.header = header
+        img_msg.height = frame.shape[0]
+        img_msg.width = frame.shape[1]
+        img_msg.encoding = 'bgr8'
+        img_msg.is_bigendian = 0
+        img_msg.step = frame.shape[1] * 3
+        img_msg.data = np.ascontiguousarray(frame).tobytes()
+        return img_msg
 
 
 def main():
