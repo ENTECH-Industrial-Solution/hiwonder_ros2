@@ -101,6 +101,27 @@ def test_tag_to_pedestal_top():
         atol=1e-9)
 
 
+def test_quaternion_from_rvec_matches_the_rotation_matrix():
+    # Checked against cv2.Rodrigues rather than a hand-written expected
+    # quaternion: the property that matters is that rotating a vector by the
+    # quaternion and by the matrix give the same answer.
+    for axis_angle in ([0.0, 0.0, 0.0],
+                       [0.3, -0.2, 1.1],
+                       [math.pi - 1e-6, 0.0, 0.0],
+                       [0.0, math.pi - 1e-6, 0.0],
+                       [0.0, 0.0, math.pi - 1e-6]):
+        rvec = np.array(axis_angle, dtype=np.float64).reshape(3, 1)
+        matrix, _ = cv2.Rodrigues(rvec)
+        x, y, z, w = tags.quaternion_from_rvec(rvec)
+        assert math.isclose(x * x + y * y + z * z + w * w, 1.0, abs_tol=1e-9)
+        from_quat = np.array([
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ])
+        np.testing.assert_allclose(from_quat, matrix, atol=1e-9)
+
+
 import importlib.util  # noqa: E402  (grouped with the tool-loading helpers)
 import pathlib  # noqa: E402
 import xml.etree.ElementTree as ET  # noqa: E402

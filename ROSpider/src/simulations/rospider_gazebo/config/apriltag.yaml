@@ -1,0 +1,37 @@
+# AprilTag detection for the simulation. The geometry constants live in
+# rospider_gazebo/tags.py, which also generates the textures and the station
+# models; tag_size here must agree with them or every reported distance is
+# wrong by the ratio between the two.
+apriltag_detect:
+  ros__parameters:
+    # Edge of the black square in metres, excluding the white quiet zone.
+    tag_size: 0.15
+
+    # Only tag36h11 is supported. The parameter exists so a wrong value stops
+    # the node at startup instead of leaving it running and detecting nothing,
+    # which looks exactly like a broken camera.
+    family: tag36h11
+
+    # A planar square has two poses that reproject almost identically; the
+    # node keeps the lower-error one. Above this threshold neither is
+    # trustworthy and the detection is dropped. On a synthetic 60-degree view
+    # the two errors measure 1.1e-06 px and 3.27 px, so 3.0 sits between a
+    # clean solve and a genuinely ambiguous one.
+    max_reproj_error_px: 3.0
+
+    publish_tf: true
+    image_topic: /depth_cam/rgb/image_raw
+
+    # The overlay costs a frame copy; turn it off for a headless run.
+    draw: true
+
+    # Where pick_place.launch.py spawns tag_station_<id> models, in the world
+    # frame: [x, y, yaw]. The key names the tag id. The node never reads this;
+    # the launch file loads the YAML directly, exactly as it already does for
+    # pick_place.yaml's `scene`, so the layout has one source of truth.
+    #
+    # One station by default: enough to see detection working. Add more when
+    # you design your own world, and generate their assets with
+    #   python3 tools/make_tag_textures.py 1 2
+    stations:
+      station0: [0.9, 0.0, 3.14159]

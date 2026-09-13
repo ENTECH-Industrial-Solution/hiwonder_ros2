@@ -8,6 +8,7 @@ install(DIRECTORY config launch maps models rviz urdf worlds
   DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_place.py
+                 scripts/apriltag_detect.py
   DESTINATION lib/${PROJECT_NAME})
 
 # rospider_gazebo.maps: map name -> <workspace>/maps path, used by the launch files

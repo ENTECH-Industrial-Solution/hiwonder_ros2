@@ -33,6 +33,7 @@ import rclpy
 from cv_bridge import CvBridge
 from interfaces.msg import ObjectInfo, ObjectsInfo
 from rclpy.node import Node
+from rospider_gazebo.ros_image import to_image_msg
 from sensor_msgs.msg import Image
 
 DRAW_BGR = {'red': (0, 0, 255), 'green': (0, 255, 0), 'blue': (255, 0, 0)}
@@ -300,7 +301,7 @@ class ColorDetectNode(Node):
                     throttle_duration_sec=5.0)
 
         self.objects_pub.publish(result)
-        self.image_pub.publish(self._to_image_msg(frame, msg.header))
+        self.image_pub.publish(to_image_msg(frame, msg.header))
 
         if self.tune:
             with self._lock:
@@ -318,25 +319,6 @@ class ColorDetectNode(Node):
             mask = matched if mask is None else cv2.bitwise_or(mask, matched)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-    def _to_image_msg(self, frame, header):
-        # Built by hand instead of cv_bridge.cv2_to_imgmsg: on this dev
-        # machine a pip-installed opencv-python (5.0.0) shadows the apt
-        # OpenCV that cv_bridge's C++ extension was compiled against, so
-        # cv2_to_imgmsg raises KeyError: 16 while looking up the encoding's
-        # numpy dtype from the wrong module's constants. imgmsg_to_cv2 (used
-        # above, for the incoming image) is unaffected. A contiguous bgr8
-        # frame needs no cv_bridge machinery to serialize, so build it here
-        # instead of depending on the shadowed cv2 import resolving right.
-        img_msg = Image()
-        img_msg.header = header
-        img_msg.height = frame.shape[0]
-        img_msg.width = frame.shape[1]
-        img_msg.encoding = 'bgr8'
-        img_msg.is_bigendian = 0
-        img_msg.step = frame.shape[1] * 3
-        img_msg.data = np.ascontiguousarray(frame).tobytes()
-        return img_msg
 
     # ---------------------------------------------------------------- tuner
 

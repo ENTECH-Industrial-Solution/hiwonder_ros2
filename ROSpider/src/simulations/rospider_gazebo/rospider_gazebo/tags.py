@@ -125,3 +125,31 @@ def tag_to_pedestal_top():
     return np.array([0.0,
                      PEDESTAL_SIZE[2] - TAG_CENTRE_HEIGHT,
                      -BOARD_OFFSET_X])
+
+
+def quaternion_from_rvec(rvec):
+    """Rodrigues rotation vector -> (x, y, z, w), the order ROS uses.
+
+    Written out rather than pulled from tf_transformations, which is not a
+    declared dependency of this package and is not needed for four lines of
+    algebra. The branch on the trace is not an optimisation: the direct
+    formula divides by sqrt(trace + 1), which goes to zero for rotations near
+    180 degrees and loses all precision there.
+    """
+    matrix, _ = cv2.Rodrigues(np.asarray(rvec, dtype=np.float64).reshape(3, 1))
+    trace = float(np.trace(matrix))
+    if trace > 0.0:
+        scale = 0.5 / np.sqrt(trace + 1.0)
+        return (float((matrix[2, 1] - matrix[1, 2]) * scale),
+                float((matrix[0, 2] - matrix[2, 0]) * scale),
+                float((matrix[1, 0] - matrix[0, 1]) * scale),
+                float(0.25 / scale))
+    i = int(np.argmax(np.diag(matrix)))
+    j, k = (i + 1) % 3, (i + 2) % 3
+    scale = float(np.sqrt(matrix[i, i] - matrix[j, j] - matrix[k, k] + 1.0) * 2.0)
+    quaternion = [0.0, 0.0, 0.0, 0.0]
+    quaternion[i] = 0.25 * scale
+    quaternion[j] = float((matrix[j, i] + matrix[i, j]) / scale)
+    quaternion[k] = float((matrix[k, i] + matrix[i, k]) / scale)
+    quaternion[3] = float((matrix[k, j] - matrix[j, k]) / scale)
+    return tuple(quaternion)
