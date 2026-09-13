@@ -99,3 +99,59 @@ def test_tag_to_pedestal_top():
          tags.PEDESTAL_SIZE[2] - tags.TAG_CENTRE_HEIGHT,
          -tags.BOARD_OFFSET_X],
         atol=1e-9)
+
+
+import importlib.util  # noqa: E402  (grouped with the tool-loading helpers)
+import pathlib  # noqa: E402
+import xml.etree.ElementTree as ET  # noqa: E402
+
+_PKG_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def _load_tool():
+    """tools/ is not an installed package; load the script by path."""
+    spec = importlib.util.spec_from_file_location(
+        'make_tag_textures', _PKG_ROOT / 'tools' / 'make_tag_textures.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _boxes(sdf_text):
+    """{visual or collision name: (sx, sy, sz)} for every box in the model."""
+    root = ET.fromstring(sdf_text)
+    out = {}
+    for element in root.iter():
+        if element.tag not in ('visual', 'collision'):
+            continue
+        size = element.find('.//box/size')
+        if size is not None:
+            out[element.get('name')] = tuple(
+                round(float(v), 6) for v in size.text.split())
+    return out
+
+
+def test_committed_station_sdf_matches_geometry():
+    # The SDF on disk is generated, but nothing stops someone editing it by
+    # hand. If it drifts from tags.py the solver's distances stay right while
+    # the rendered tag is the wrong size -- a failure with no visible symptom
+    # except systematically wrong poses.
+    committed = (_PKG_ROOT / 'models' / 'tag_station_0' / 'model.sdf').read_text()
+    assert committed == _load_tool().station_sdf(0)
+
+
+def test_station_boxes_match_tags_module():
+    boxes = _boxes(_load_tool().station_sdf(0))
+    assert boxes['pedestal_v'] == tuple(round(v, 6) for v in tags.PEDESTAL_SIZE)
+    assert boxes['board_v'] == (round(tags.BOARD_THICKNESS, 6),
+                                round(tags.BOARD_FACE, 6),
+                                round(tags.BOARD_FACE, 6))
+    assert boxes['post_v'] == tuple(round(v, 6) for v in tags.POST_SIZE)
+
+
+def test_committed_texture_is_detectable():
+    image = cv2.imread(
+        str(_PKG_ROOT / 'worlds' / 'textures' / 'tag_0.png'),
+        cv2.IMREAD_GRAYSCALE)
+    assert image is not None, 'worlds/textures/tag_0.png is missing'
+    assert [tag_id for tag_id, _ in tags.detect_tags(image)] == [0]
