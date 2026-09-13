@@ -6,7 +6,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -103,6 +103,19 @@ def generate_launch_description():
                      # arrives as the string "false", which is truthy.
                      'tune': ParameterValue(
                          LaunchConfiguration('tune'), value_type=bool)}],
+        condition=IfCondition(PythonExpression(
+            ["'", LaunchConfiguration('detector'), "' == 'color'"])),
+    )
+
+    yolo_detector = Node(
+        package='rospider_gazebo',
+        executable='yolo_detect.py',
+        name='yolo_detect',
+        output='screen',
+        parameters=[os.path.join(pkg, 'config', 'yolo.yaml'),
+                    {'use_sim_time': True}],
+        condition=IfCondition(PythonExpression(
+            ["'", LaunchConfiguration('detector'), "' == 'yolo'"])),
     )
 
     picker = Node(
@@ -137,6 +150,9 @@ def generate_launch_description():
             'tune', default_value='false',
             description='open the HSV trackbar window in color_detect'),
         DeclareLaunchArgument(
+            'detector', default_value='color', choices=['color', 'yolo'],
+            description='which node publishes /yolo/object_detect'),
+        DeclareLaunchArgument(
             'tags', default_value='true',
             description='run apriltag_detect and spawn the tag stations'),
         DeclareLaunchArgument(
@@ -148,5 +164,6 @@ def generate_launch_description():
         # The robot and its controllers need to exist before the cubes land on
         # the pedestal, or they drop through a world that is still loading.
         TimerAction(period=5.0, actions=spawns + station_spawns
-                    + [detector, tag_detector, picker, rviz]),
+                    + [detector, yolo_detector, tag_detector,
+                       picker, rviz]),
     ])

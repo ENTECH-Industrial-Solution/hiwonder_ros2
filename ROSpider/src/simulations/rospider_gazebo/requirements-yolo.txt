@@ -1,0 +1,26 @@
+# Optional: only the detector:=yolo path needs these. They are deliberately
+# NOT in package.xml -- torch is about 3 GB, and the default detector:=color
+# path, colcon build, and every test must all work without it.
+#
+# This machine's python3 is PEP 668 externally-managed, and everything else
+# here (opencv-python 5.0, ultralytics) is already installed to the user site,
+# which is what a node launched by ros2 launch can see. A venv would not be on
+# a launched node's path. So:
+#
+#   pip install --user --break-system-packages -r requirements-yolo.txt
+#
+# torch is NOT listed below, because which build you need depends on the GPU.
+# The development machine has an RTX 5060, which is Blackwell (sm_120); the
+# default PyPI wheel is not built for it and fails at the first CUDA call:
+#
+#   pip install --user --break-system-packages torch torchvision \
+#       --index-url https://download.pytorch.org/whl/cu128
+#
+# CPU-only works everywhere and is much smaller, just slower. It is fine for
+# inference in the simulator and painful for training:
+#
+#   pip install --user --break-system-packages torch torchvision \
+#       --index-url https://download.pytorch.org/whl/cpu
+#
+# Set yolo_detect's `device` parameter to 'cpu' to force CPU inference.
+ultralytics>=8.3

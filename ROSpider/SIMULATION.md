@@ -436,6 +436,61 @@ python3 tools/make_tag_textures.py 1 2
 
 โหนดจะ publish `apriltag_info` ที่มี `data` ว่างต่อไปเรื่อย ๆ **ไม่ใช่หยุด publish** เพื่อให้แยกออกว่า "มองอยู่แต่ไม่เจอ" ต่างจาก "โหนดตายแล้ว" และ TF `tag_<id>` จะไม่ถูกประกาศใหม่ ผู้ใช้ต้องเช็ค timestamp เอง ไม่ใช่เชื่อว่าค่าล่าสุดสดเสมอ
 
+## 9. YOLO (ตรวจจับวัตถุแบบเทรนเองได้)
+
+`color_detect` กับ `yolo_detect` **ปล่อยของอย่างเดียวกันเป๊ะ** — `interfaces/ObjectsInfo` บน `/yolo/object_detect` สลับกันได้โดย `pick_and_place` ไม่ต้องแก้อะไรเลยแม้แต่บรรทัดเดียว
+
+```bash
+ros2 launch rospider_gazebo pick_place.launch.py detector:=yolo
+```
+
+ทั้งสองตัว**ไม่เคยรันพร้อมกัน** เลือกได้ทีละตัว
+
+| | `detector:=color` (ค่าเริ่มต้น) | `detector:=yolo` |
+|---|---|---|
+| ต้องลงอะไรเพิ่ม | ไม่ต้อง | torch + ultralytics |
+| เพิ่มวัตถุใหม่ | ปรับช่วง HSV (หัวข้อ 7) | เก็บภาพแล้วเทรน |
+| ทนต่อแสง/เงา | ปานกลาง | ดีกว่า |
+| จำแนกได้จาก | สีอย่างเดียว | รูปร่างและลวดลาย |
+
+### ติดตั้ง (เฉพาะทาง YOLO)
+
+python3 ของเครื่องนี้เป็นแบบ externally-managed (PEP 668) และของอื่นในโปรเจกต์นี้ (opencv 5.0, ultralytics) ก็ลงไว้ที่ user site ซึ่งเป็นที่ที่ node ที่ `ros2 launch` เรียกจะมองเห็น — **venv จะมองไม่เห็น** ดังนั้น:
+
+```bash
+pip install --user --break-system-packages -r requirements-yolo.txt
+```
+
+แล้วลง torch แยกต่างหาก เพราะเลือก build ตามการ์ด:
+
+```bash
+# การ์ด Blackwell เช่น RTX 50xx ต้องใช้ cu128 ขึ้นไป wheel ธรรมดาใช้ไม่ได้
+pip install --user --break-system-packages torch torchvision     --index-url https://download.pytorch.org/whl/cu128
+```
+
+ถ้าไม่มี GPU หรือไม่อยากโหลด 3 GB ใช้ CPU ก็ได้ (inference พอไหว เทรนจะช้ามาก):
+
+```bash
+pip install --user --break-system-packages torch torchvision     --index-url https://download.pytorch.org/whl/cpu
+```
+แล้วตั้ง `device: cpu` ใน `config/yolo.yaml`
+
+> ถ้ายังไม่ได้ลง โหนดจะตายพร้อมข้อความบอกวิธีลง ไม่ใช่ traceback ของ import — ตั้งใจให้เป็นแบบนั้น
+
+### ตั้งค่า
+
+`config/yolo.yaml`:
+
+| ค่า | ความหมาย |
+|---|---|
+| `model_path` | ไฟล์โมเดล path เต็มก็ได้ หรือชื่อที่ ultralytics โหลดเองได้ (`yolo11n.pt`) |
+| `task` | `detect` = กรอบตรง, `obb` = กรอบเอียง — `pick_and_place` อ่านได้ทั้งคู่ |
+| `conf` | ความมั่นใจขั้นต่ำ |
+| `device` | `''` ให้เลือกเอง, `'cpu'` บังคับ CPU, `'0'` บังคับ GPU ตัวแรก |
+| `classes` | ว่าง = ปล่อยทุกคลาส ใส่รายชื่อเพื่อกรอง |
+
+> **ชื่อคลาสต้องอยู่ใน `colors` ของ `config/pick_place.yaml` ด้วย** ไม่งั้น `pick_and_place` จะไม่ยอมหยิบ มันเช็กชื่อที่รับเข้ามากับรายการนั้น
+
 ## รันหลายตัวพร้อมกัน
 
 ตั้งค่าคนละชุดในแต่ละ terminal ไม่ให้ชนกัน:

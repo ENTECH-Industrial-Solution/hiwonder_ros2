@@ -1,0 +1,30 @@
+# YOLO detection for the simulation. Swapped in for color_detect with
+#   ros2 launch rospider_gazebo pick_place.launch.py detector:=yolo
+# Both publish interfaces/ObjectsInfo on /yolo/object_detect; they are
+# alternatives and never run together.
+yolo_detect:
+  ros__parameters:
+    # Trained by tools/train_yolo.py and committed, so a fresh clone can run
+    # detector:=yolo without training anything. Replace the file, or point
+    # this somewhere else, to use your own model. An absolute path or a name
+    # ultralytics can fetch (yolo11n.pt) both work.
+    model_path: models/yolo/cubes.pt
+
+    # 'detect' for axis-aligned boxes, 'obb' for oriented ones. Both are legal
+    # ObjectInfo.box shapes and pick_and_place.py reads either.
+    task: detect
+
+    conf: 0.5
+
+    # '' lets ultralytics choose. 'cpu' forces CPU, which works everywhere and
+    # is the fallback when the GPU wheel is wrong for the card.
+    device: ''
+
+    # Empty means publish every class the model knows. Narrow it to keep an
+    # over-eager model from feeding pick_and_place things it cannot grasp.
+    # Names here must match pick_place.yaml's `colors` for a class to be
+    # pickable.
+    classes: []
+
+    image_topic: /depth_cam/rgb/image_raw
+    draw: true
