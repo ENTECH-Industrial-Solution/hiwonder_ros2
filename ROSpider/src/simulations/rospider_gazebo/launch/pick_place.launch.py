@@ -58,7 +58,11 @@ def generate_launch_description():
         name='color_detect',
         output='screen',
         parameters=[os.path.join(pkg, 'config', 'color_detect.yaml'),
-                    {'use_sim_time': True}],
+                    {'use_sim_time': True,
+                     # value_type=bool matters: a bare LaunchConfiguration
+                     # arrives as the string "false", which is truthy.
+                     'tune': ParameterValue(
+                         LaunchConfiguration('tune'), value_type=bool)}],
     )
 
     picker = Node(
@@ -89,6 +93,9 @@ def generate_launch_description():
             default_value=os.path.join(pkg, 'worlds', 'rospider_room.sdf')),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('auto_start', default_value='true'),
+        DeclareLaunchArgument(
+            'tune', default_value='false',
+            description='open the HSV trackbar window in color_detect'),
         gazebo,
         # The robot and its controllers need to exist before the cubes land on
         # the pedestal, or they drop through a world that is still loading.
