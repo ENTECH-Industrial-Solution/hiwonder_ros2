@@ -20,11 +20,16 @@ yolo_detect:
     # is the fallback when the GPU wheel is wrong for the card.
     device: ''
 
-    # Empty means publish every class the model knows. Narrow it to keep an
-    # over-eager model from feeding pick_and_place things it cannot grasp.
-    # Names here must match pick_place.yaml's `colors` for a class to be
-    # pickable.
-    classes: []
+    # Commented out on purpose: an empty YAML list has no inferrable type and
+    # ROS 2 refuses to declare the parameter at all, killing the node in its
+    # constructor with "Cannot declare a statically typed parameter with
+    # default value of type PARAMETER_NOT_SET". Absent means the same thing as
+    # empty here -- publish every class the model knows.
+    #
+    # Uncomment with real names to narrow it, which keeps an over-eager model
+    # from feeding pick_and_place things it cannot grasp. Names must also
+    # appear in pick_place.yaml's `colors` for a class to be pickable.
+    # classes: ['red', 'green', 'blue']
 
     image_topic: /depth_cam/rgb/image_raw
     draw: true

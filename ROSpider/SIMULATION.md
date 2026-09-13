@@ -491,6 +491,65 @@ pip install --user --break-system-packages torch torchvision     --index-url htt
 
 > **ชื่อคลาสต้องอยู่ใน `colors` ของ `config/pick_place.yaml` ด้วย** ไม่งั้น `pick_and_place` จะไม่ยอมหยิบ มันเช็กชื่อที่รับเข้ามากับรายการนั้น
 
+### เก็บข้อมูลเทรนเอง (ไม่ต้องลากกรอบเอง)
+
+เปิดซิมไว้ก่อน แล้วรันเครื่องมือเก็บข้อมูลอีกหน้าต่าง:
+
+```bash
+ros2 launch rospider_gazebo pick_place.launch.py auto_start:=false tags:=false
+```
+```bash
+cd ~/entech_hiwonder_ros2_ws/ROSpider/src/simulations/rospider_gazebo
+python3 tools/capture_dataset.py --samples 500 --out ~/datasets/cubes
+```
+
+เครื่องมือจะสุ่มย้ายลูกบาศก์ รอให้หยุดนิ่ง **อ่านตำแหน่งจริงกลับมา** แล้วคำนวณกรอบจากเรขาคณิต — ฉายมุมกล่องทั้ง 8 จุดผ่าน `camera_info` และ TF จริง ได้ label ถูกต้อง 100% โดยไม่ต้องลากกรอบเอง
+
+> **ทำไมต้องอ่านตำแหน่งกลับ** ตอนแรกผมเขียนให้เชื่อตำแหน่งที่สั่งไป เพราะ "เราวางเอง เราก็รู้" — **ผิด** ลูกบาศก์เป็นวัตถุที่มีฟิสิกส์ สั่งไป `(0.28, 0.11, 0.105)` วัดได้จริงว่าไปจบที่ `(0.299, 0.110, 0.025)` คือไถล 2 ซม. แล้วตกจากแท่นลงพื้น ตอนวาด label กลับลงภาพเห็นชัดว่ากรอบเลื่อนจากลูกบาศก์ทุกใบ
+
+**ตรวจ label ด้วยตาทุกครั้งก่อนเทรน** — dataset ที่ผิดจะเทรนสำเร็จเงียบ ๆ แล้วได้โมเดลที่มั่นใจแต่ผิด:
+
+```bash
+python3 - <<'EOF'
+import glob, cv2
+D = '/home/YOURNAME/datasets/cubes'
+for path in sorted(glob.glob(f'{D}/images/*/*.jpg'))[:5]:
+    img = cv2.imread(path); h, w = img.shape[:2]
+    lab = path.replace('/images/', '/labels/').replace('.jpg', '.txt')
+    for line in open(lab):
+        c, x, y, bw, bh = line.split()
+        x, y, bw, bh = float(x)*w, float(y)*h, float(bw)*w, float(bh)*h
+        cv2.rectangle(img, (int(x-bw/2), int(y-bh/2)),
+                      (int(x+bw/2), int(y+bh/2)), (0,255,0), 2)
+    out = '/tmp/check_' + path.split('/')[-1]
+    cv2.imwrite(out, img); print(out)
+EOF
+```
+
+กรอบต้องทาบบนวัตถุพอดี ถ้าเลื่อนเท่ากันทุกภาพแปลว่า TF หรือการฉายภาพผิด ถ้ามีกรอบบนของที่ถูกบังอยู่แปลว่า occlusion check ไม่ทำงาน
+
+### เทรน
+
+```bash
+python3 tools/train_yolo.py --data ~/datasets/cubes --name cubes
+```
+
+ได้ `models/yolo/cubes.pt` แล้วชี้ `model_path` ใน `config/yolo.yaml` มาที่ไฟล์นี้
+
+ฉากในซิมเรียบและไม่รก ค่า mAP50 ควรได้เกิน 0.9 **ถ้าต่ำกว่านั้นแปลว่า label ผิด ไม่ใช่ epochs น้อย** กลับไปตรวจภาพก่อน
+
+### เพิ่มวัตถุใหม่
+
+1. แก้ `OBJECTS` ใน `tools/capture_dataset.py` — ใส่ชื่อโมเดลใน Gazebo, ชื่อคลาส และขนาดกล่อง
+2. เก็บข้อมูลใหม่ แล้วเทรนใหม่
+3. เพิ่มชื่อคลาสลงใน `colors` ของ `config/pick_place.yaml` ถ้าอยากให้หยิบได้
+
+> ถ้าอยากให้**หยิบ**ของใหม่ได้ด้วย ยังต้องเพิ่ม `DetachableJoint` ใน `urdf/rospider_gazebo.urdf.xacro` ไฟล์โมเดล SDF และ entry ใน `config/gz_bridge.yaml` อีก — ปลั๊กอินนั้นผูก `child_model` ตายตั้งแต่ตอนโหลด หนึ่งปลั๊กอินต่อหนึ่งวัตถุ (ยังไม่ได้ทำให้ง่ายกว่านี้ในรอบนี้)
+
+### ใช้ dataset ที่ label เอง
+
+`train_yolo.py` รับ path เดียวกัน ไม่ว่า dataset จะมาจากเครื่องมือข้างบนหรือจาก Roboflow / labelImg — ทั้งคู่ export เป็นโครงสร้าง YOLO เหมือนกัน ขอแค่มี `data.yaml` ที่บอกชื่อคลาสและโฟลเดอร์ train/val
+
 ## รันหลายตัวพร้อมกัน
 
 ตั้งค่าคนละชุดในแต่ละ terminal ไม่ให้ชนกัน:

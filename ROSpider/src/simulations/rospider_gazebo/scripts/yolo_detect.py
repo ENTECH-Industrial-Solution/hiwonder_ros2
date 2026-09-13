@@ -17,6 +17,7 @@ has to produce one clear sentence rather than an import traceback at launch.
 """
 
 import logging
+import os
 import queue
 import threading
 
@@ -28,6 +29,51 @@ from interfaces.msg import ObjectInfo, ObjectsInfo
 from rclpy.node import Node
 from rospider_gazebo.ros_image import to_image_msg
 from sensor_msgs.msg import Image
+
+
+def _package_dir():
+    """Where a relative model_path is resolved from.
+
+    The package share directory, not this file's parent: in the install space
+    scripts land in lib/rospider_gazebo while CMakeLists installs models/ to
+    share/rospider_gazebo, so walking up from __file__ lands in the wrong
+    tree. With --symlink-install the share copy points back at the source, so
+    a model trained into models/yolo/ is picked up without rebuilding.
+    """
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        return get_package_share_directory('rospider_gazebo')
+    except Exception:
+        # Running the script straight out of the source tree, uninstalled.
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _resolve_model(model_path):
+    """Absolute path to the weights, or the bare name for one ultralytics can
+    fetch itself (yolo11n.pt and friends).
+
+    A relative path is taken as relative to the package, so config/yolo.yaml
+    can say `models/yolo/cubes.pt` and mean the file in this repository rather
+    than something relative to whatever directory the launch happened from.
+    """
+    if os.path.isabs(model_path):
+        return model_path
+    candidate = os.path.join(_package_dir(), model_path)
+    if os.path.exists(candidate):
+        return candidate
+    if os.sep in model_path:
+        # It names a path in this package, and that path is not there.
+        raise FileNotFoundError(
+            f'{candidate} does not exist. The repository does not ship a '
+            'trained model yet: capture a dataset and train one with\n'
+            '  python3 tools/capture_dataset.py --samples 500 --out '
+            '~/datasets/cubes\n'
+            '  python3 tools/train_yolo.py --data ~/datasets/cubes '
+            '--name cubes\n'
+            'or point model_path at a stock model such as yolo11n.pt, which '
+            'ultralytics downloads on first use.')
+    # A bare name: let ultralytics fetch it.
+    return model_path
 
 
 def _load_yolo(model_path, task):
@@ -65,7 +111,7 @@ class YoloDetectNode(Node):
         image_topic = str(self._param('image_topic',
                                       '/depth_cam/rgb/image_raw'))
 
-        self.model = _load_yolo(model_path, self.task)
+        self.model = _load_yolo(_resolve_model(model_path), self.task)
 
         # maxsize 2, and a full queue drops the frame rather than blocking.
         # Inference is slower than the 15 Hz camera, and a growing backlog
