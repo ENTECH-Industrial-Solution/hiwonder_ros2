@@ -19,6 +19,8 @@ if(BUILD_TESTING)
   # import arm_ik` resolves without depending on the install space being sourced.
   ament_add_pytest_test(test_arm_ik test/test_arm_ik.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_apriltag test/test_apriltag.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
 ament_package()
