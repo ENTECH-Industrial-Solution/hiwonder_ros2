@@ -102,6 +102,43 @@ pick_and_place:
       slot1: [0.160, 0.0, 0.135]
       slot2: [0.160, -0.07, 0.135]
 
+    # ~/pick parks the cube here and waits for ~/place, so the robot can be
+    # driven somewhere in between. Chosen as a POINT rather than as joint
+    # angles: the cube is welded to link5 at whatever orientation the hand
+    # had when it grasped, so holding it at a pitch near the grasp pitch
+    # (70-80 deg) keeps it level. Solved with plan_grasp(back_off=0.0) at
+    # 70 deg it leaves 34.2 deg of joint-limit margin, and carries the cube
+    # 0.22 m up -- well clear of the 0.08 m pedestal and of the feet, which
+    # stand at x ~= 0.193.
+    carry_point: [0.18, 0.0, 0.22]
+
+    # Where ~/place puts the cube when called with an empty string: straight
+    # out in front, at a release height for the FLOOR, not for the pedestal.
+    # z is the commanded release height, so 0.035 = a cube resting centre of
+    # 0.025 plus a 1 cm drop. The drop slots' 0.135 is 0.105 + 0.03 because
+    # they sit on the 0.08 m pedestal; reusing that number here drops the
+    # cube 11 cm onto the floor, and it bounces -- measured 6 cm and 2 cm
+    # away from the target in two runs. Solving at 90 deg with 17.9 deg of
+    # joint-limit margin, this is also a better-conditioned pose than 0.135.
+    # Pass an explicit z of about 0.135 when placing back onto the pedestal.
+    # There is no single right default: the node cannot know what surface is
+    # under the robot. Commanding a z BELOW that surface presses the cube into
+    # it -- the hand has no collision geometry but the cube does -- and it
+    # usually just settles on top (measured: placing with the floor value
+    # while still over the pedestal left the cube resting at 0.105, the
+    # correct centre for the pedestal, 2.3 cm from the target). But if the
+    # spot is crowded the squeezed cube can pop out sideways: one test placed
+    # two cubes 5.5 cm apart -- less than their 5 cm width plus clearance --
+    # and the second ended up 10 cm away, off the pedestal entirely.
+    # So: pass a z suited to the surface, and leave room around the target.
+    # It is deliberately not one of the drop slots: those are a row the
+    # autonomous ~/start run fills in order
+    # and indexes with placed_count, while this is "in front of wherever I
+    # am standing now". Keeping them separate stops the two modes fighting
+    # over placed_count. Both are in base_footprint and so both move with
+    # the robot; a coordinate passed to ~/place is read in the same frame.
+    place_point: [0.160, 0.0, 0.035]
+
     colors: ['red', 'green', 'blue']
     stable_frames: 5
     joint_tolerance: 0.02

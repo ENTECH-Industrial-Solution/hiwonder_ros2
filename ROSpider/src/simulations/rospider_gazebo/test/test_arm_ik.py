@@ -91,6 +91,14 @@ DROP_POINTS = {
     for name, (x, y, z) in sorted(_PARAMS['drop_slots'].items())
 }
 
+# The two poses the manual ~/pick / ~/place pair commands. carry_point is
+# solved with back_off 0 -- it is a single hold pose, not an approach plus a
+# grasp -- so it gets its own check below rather than joining DROP_POINTS.
+CARRY_POINT = tuple(_PARAMS['carry_point'][:2]) + (
+    _PARAMS['carry_point'][2] - arm_ik.BASE_LINK_HEIGHT,)
+PLACE_POINT = tuple(_PARAMS['place_point'][:2]) + (
+    _PARAMS['place_point'][2] - arm_ik.BASE_LINK_HEIGHT,)
+
 
 def test_round_trip_over_the_pedestal_workspace():
     checked = 0
@@ -145,6 +153,9 @@ def test_scene_layout_is_graspable():
     # config/pick_place.yaml), which is exactly why the row replaced it.
     points = {name: (x, y, GRASP_Z) for name, (x, y) in LAYOUT.items()}
     points.update(DROP_POINTS)
+    # ~/place's default target: same gate as a drop slot, since it is the
+    # same kind of motion at a point the robot carries around with it.
+    points['place_point'] = PLACE_POINT
     for name, point in points.items():
         plan = arm_ik.plan_grasp(point, PITCHES, back_off=BACK_OFF)
         assert plan is not None, f'{name} has no workable approach'
@@ -153,3 +164,23 @@ def test_scene_layout_is_graspable():
         # margin (~14 deg), unlike the stacked arrangement it replaced.
         assert plan.margin > math.radians(10.0), (
             f'{name} sits {math.degrees(plan.margin):.1f} deg from a joint limit')
+
+
+def test_carry_pose_is_reachable_and_clears_the_scene():
+    """~/pick parks the cube here while the robot is driven somewhere else.
+
+    back_off is 0 because this is one hold pose, not an approach plus a
+    grasp; plan_grasp then solves the same point twice, which is what makes
+    reusing its best-margin pitch selection valid here.
+    """
+    plan = arm_ik.plan_grasp(CARRY_POINT, PITCHES, back_off=0.0)
+    assert plan is not None, 'carry_point has no workable pitch'
+    assert plan.margin > math.radians(10.0), (
+        f'carry pose sits {math.degrees(plan.margin):.1f} deg from a limit')
+
+    position, _pitch = arm_ik.forward_kinematics(plan.grasp)
+    carried_z = position[2] + arm_ik.BASE_LINK_HEIGHT
+    # The cube rides at the tool point. The pedestal top is 0.08 m, so a
+    # carry height at or below that would drag it through the scene.
+    assert carried_z > 0.15, (
+        f'cube would be carried at only {carried_z:.3f} m above the ground')

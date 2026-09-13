@@ -64,6 +64,7 @@ class State(Enum):
     DESCEND = 'DESCEND'
     GRASP = 'GRASP'
     LIFT = 'LIFT'
+    CARRY = 'CARRY'
     TO_DROP = 'TO_DROP'
     LOWER = 'LOWER'
     RELEASE = 'RELEASE'
@@ -102,9 +103,16 @@ class PickAndPlaceNode(Node):
         self.state_timeout = float(p('state_timeout').value)
         self.depth_window = int(p('depth_window_px').value)
 
-        # drop_slots arrive in base_footprint; arm_ik works in base_link.
-        for slot in self.drop_slots:
-            slot[2] -= arm_ik.BASE_LINK_HEIGHT
+        # Where ~/pick parks the cube while you drive the robot, and where
+        # ~/place puts it down when no coordinate is given. Both are relative
+        # to the robot, so driving somewhere and placing puts the cube in
+        # front of wherever it now stands -- no world-frame bookkeeping.
+        self.carry_point = np.array(p('carry_point').value, dtype=float)
+        self.place_point = np.array(p('place_point').value, dtype=float)
+
+        # These and drop_slots arrive in base_footprint; arm_ik is base_link.
+        for point in [self.carry_point, self.place_point] + self.drop_slots:
+            point[2] -= arm_ik.BASE_LINK_HEIGHT
 
         self.state = State.IDLE
         self.state_entered = self.get_clock().now()
@@ -113,6 +121,10 @@ class PickAndPlaceNode(Node):
         self.plan = None
         self.remaining = list(self.colors)
         self.placed_count = 0
+        # True for a ~/pick cycle, which stops in CARRY and waits for ~/place
+        # instead of running straight on to a drop slot like ~/start does.
+        self.manual = False
+        self._carry_announced = False
         self.detections = []
         self.streak = 0
         self.localize_misses = 0
@@ -145,6 +157,8 @@ class PickAndPlaceNode(Node):
             JointState, '/joint_states', self.joint_callback, 10)
 
         self.create_service(SetString, '~/start', self.start_callback)
+        self.create_service(SetString, '~/pick', self.pick_callback)
+        self.create_service(SetString, '~/place', self.place_callback)
         self.create_service(Trigger, '~/stop', self.stop_callback)
 
         # Gazebo welds all three cubes to link5 the moment they spawn (proven
@@ -175,6 +189,7 @@ class PickAndPlaceNode(Node):
         self._startup_started = self.get_clock().now()
         self._startup_deadline_s = 30.0   # generous: normally ready in ~5 s
         self._pending_colors = list(self.colors) if bool(p('auto_start').value) else None
+        self._pending_manual = False
         self.startup_timer = self.create_timer(0.5, self._startup_tick)
 
         self.create_timer(0.1, self.tick)
@@ -208,8 +223,9 @@ class PickAndPlaceNode(Node):
             f'{self._startup_firings} startup detach firings; ready to '
             'command the arm')
         if self._pending_colors is not None:
-            self._begin_now(self._pending_colors)
+            self._begin_now(self._pending_colors, self._pending_manual)
             self._pending_colors = None
+            self._pending_manual = False
 
     # ---------------------------------------------------------------- inputs
 
@@ -235,12 +251,88 @@ class PickAndPlaceNode(Node):
             else f'picking {wanted} once startup detach completes')
         return response
 
+    def pick_callback(self, request, response):
+        """Pick one colour and hold it, so the robot can be driven away."""
+        if self.state is State.CARRY:
+            response.success = False
+            response.message = (
+                f'already holding {self.target_color}; call ~/place or '
+                '~/stop first')
+            return response
+        wanted = request.data.strip() or (self.remaining[0] if self.remaining
+                                          else self.colors[0])
+        if wanted not in self.colors:
+            response.success = False
+            response.message = f'{wanted!r} is not one of {self.colors}'
+            return response
+        self.begin([wanted], manual=True)
+        response.success = True
+        response.message = (
+            f'picking {wanted}' if self._startup_done
+            else f'picking {wanted} once startup detach completes')
+        return response
+
+    def place_callback(self, request, response):
+        """Put the held cube down, here, at an optional coordinate."""
+        if self.state is not State.CARRY:
+            response.success = False
+            response.message = (
+                f'not holding anything (state {self.state.value}); call '
+                '~/pick first')
+            return response
+
+        target, problem = self._parse_place_target(request.data)
+        if problem is not None:
+            response.success = False
+            response.message = problem
+            return response
+
+        plan = self.plan_for(target)
+        if plan is None:
+            ground = target.copy()
+            ground[2] += arm_ik.BASE_LINK_HEIGHT
+            response.success = False
+            response.message = (
+                f'{np.round(ground, 3).tolist()} is not reachable; the arm '
+                'only spans a small area in front of the robot, so drive '
+                'closer or pick a nearer point')
+            return response
+
+        self.plan = plan
+        self.send_arm(plan.approach)
+        self.enter(State.TO_DROP)
+        response.success = True
+        response.message = f'placing {self.target_color}'
+        return response
+
+    def _parse_place_target(self, text):
+        """'' -> the configured place point; 'x y z' -> that point.
+
+        Coordinates are read in base_footprint, which is the frame the config
+        file and the docs use, and returned in base_link, which is the frame
+        arm_ik works in. Returns (point, problem); one of them is None.
+        """
+        if not text.strip():
+            return self.place_point.copy(), None
+        parts = text.replace(',', ' ').split()
+        if len(parts) != 3:
+            return None, (f'expected three numbers "x y z" in base_footprint '
+                          f'metres, or an empty string for the default place '
+                          f'point; got {text!r}')
+        try:
+            point = np.array([float(value) for value in parts], dtype=float)
+        except ValueError:
+            return None, f'could not read three numbers from {text!r}'
+        point[2] -= arm_ik.BASE_LINK_HEIGHT
+        return point, None
+
     def stop_callback(self, _request, response):
         # Without this, a /stop called between DESCEND and LOWER leaves the
         # cube welded to link5 forever -- tick() returns immediately once in
         # DONE, so nothing ever detaches it or opens the gripper (Finding 3).
         self.remaining = []
         self._pending_colors = None
+        self.manual = False
         self.release_all()
         self.send_gripper(self.gripper_open)
         self.target_color = None
@@ -251,16 +343,18 @@ class PickAndPlaceNode(Node):
 
     # --------------------------------------------------------------- helpers
 
-    def begin(self, colors):
+    def begin(self, colors, manual=False):
         # The node must never command the arm before the startup detach
         # sequence has finished (see __init__). If it hasn't, remember the
         # request and let _startup_tick start it once the sequence completes.
         if not self._startup_done:
             self._pending_colors = list(colors)
+            self._pending_manual = manual
             return
-        self._begin_now(colors)
+        self._begin_now(colors, manual)
 
-    def _begin_now(self, colors):
+    def _begin_now(self, colors, manual=False):
+        self.manual = manual
         # A /start mid-carry (or auto_start racing a leftover pending run)
         # must not carry whatever cube is currently welded into the new run.
         self.release_all()
@@ -281,6 +375,7 @@ class PickAndPlaceNode(Node):
         self.get_logger().info(f'{self.state.value} -> {state.value}')
         self.state = state
         self.state_entered = self.get_clock().now()
+        self._carry_announced = False
         self.streak = 0
         self.localize_misses = 0
         # Only meaningful for LOOK (see _on_look), reset unconditionally here
@@ -333,7 +428,9 @@ class PickAndPlaceNode(Node):
         if self.target_color in self.remaining:
             self.remaining.remove(self.target_color)
         self.target_color = None
-        self.enter(State.LOOK)
+        # A manual ~/pick owns exactly one cube: give control back rather
+        # than hunting for the next colour on its own.
+        self.enter(State.IDLE if self.manual else State.LOOK)
 
     def localize(self, u, v):
         """Pixel centroid + depth -> a point in base_link, or None."""
@@ -374,7 +471,10 @@ class PickAndPlaceNode(Node):
     def tick(self):
         if self.state in (State.IDLE, State.DONE):
             return
-        if (self.state not in (State.LOOK,)
+        # LOOK runs its own timeout, and CARRY deliberately has none: it
+        # waits for a ~/place that may be minutes away while the robot is
+        # driven somewhere, and timing out would drop the cube en route.
+        if (self.state not in (State.LOOK, State.CARRY)
                 and self.elapsed() > self.state_timeout):
             self.abandon(f'timed out in {self.state.value}')
             return
@@ -497,35 +597,60 @@ class PickAndPlaceNode(Node):
             self.enter(State.LIFT)
 
     def _on_lift(self):
-        if self.arrived():
-            # Fix round 2: a stacked third release is not reachable with a
-            # steep approach at all (the arm's 2R sub-chain is too short to
-            # back off from shoulder height -- see config/pick_place.yaml),
-            # so each cube now goes into its own ground-level slot instead of
-            # on top of the previous one. placed_count indexes drop_slots in
-            # placement order, same role stack_height's multiplier used to
-            # play.
-            if self.placed_count >= len(self.drop_slots):
-                self.get_logger().error(
-                    f'placed_count {self.placed_count} has no drop slot '
-                    f'(only {len(self.drop_slots)} configured); releasing '
-                    'the held cube and stopping')
-                # Otherwise this is the last remaining path that could leave
-                # a cube welded to link5 forever: DONE returns immediately
-                # from tick(), so nothing else would ever detach or open the
-                # gripper.
-                self.release_all()
-                self.send_gripper(self.gripper_open)
-                self.enter(State.DONE)
-                return
-            drop = self.drop_slots[self.placed_count].copy()
-            plan = self.plan_for(drop)
+        if not self.arrived():
+            return
+        if self.manual:
+            # ~/pick stops here: park the cube high and close in, then hold
+            # until ~/place. plan_grasp with back_off=0 reuses the same
+            # best-margin pitch selection as a grasp; the approach pose is
+            # the grasp pose, which is exactly what a single hold pose wants.
+            plan = arm_ik.plan_grasp(self.carry_point, self.pitches,
+                                     back_off=0.0)
             if plan is None:
-                self.abandon('drop slot unreachable')
+                self.abandon('carry pose unreachable')
                 return
             self.plan = plan
-            self.send_arm(plan.approach)
-            self.enter(State.TO_DROP)
+            self.send_arm(plan.grasp)
+            self.enter(State.CARRY)
+            return
+        self._lift_to_slot()
+
+    def _on_carry(self):
+        if self.arrived() and not self._carry_announced:
+            self._carry_announced = True
+            self.get_logger().info(
+                f'holding {self.target_color}; drive the robot, then call '
+                '~/place (optionally with "x y z" in base_footprint metres)')
+
+    def _lift_to_slot(self):
+        # Fix round 2: a stacked third release is not reachable with a
+        # steep approach at all (the arm's 2R sub-chain is too short to
+        # back off from shoulder height -- see config/pick_place.yaml),
+        # so each cube now goes into its own ground-level slot instead of
+        # on top of the previous one. placed_count indexes drop_slots in
+        # placement order, same role stack_height's multiplier used to
+        # play.
+        if self.placed_count >= len(self.drop_slots):
+            self.get_logger().error(
+                f'placed_count {self.placed_count} has no drop slot '
+                f'(only {len(self.drop_slots)} configured); releasing '
+                'the held cube and stopping')
+            # Otherwise this is the last remaining path that could leave
+            # a cube welded to link5 forever: DONE returns immediately
+            # from tick(), so nothing else would ever detach or open the
+            # gripper.
+            self.release_all()
+            self.send_gripper(self.gripper_open)
+            self.enter(State.DONE)
+            return
+        drop = self.drop_slots[self.placed_count].copy()
+        plan = self.plan_for(drop)
+        if plan is None:
+            self.abandon('drop slot unreachable')
+            return
+        self.plan = plan
+        self.send_arm(plan.approach)
+        self.enter(State.TO_DROP)
 
     def _on_to_drop(self):
         if self.arrived():
@@ -542,7 +667,8 @@ class PickAndPlaceNode(Node):
             # physically on the stack but uncounted -- the next release then
             # lands one cube-height too low, straight into the one just
             # placed (Finding 2).
-            self.placed_count += 1
+            if not self.manual:
+                self.placed_count += 1
             self.enter(State.RELEASE)
 
     def _on_release(self):
@@ -556,7 +682,7 @@ class PickAndPlaceNode(Node):
             if self.target_color in self.remaining:
                 self.remaining.remove(self.target_color)
             self.target_color = None
-            self.enter(State.LOOK)
+            self.enter(State.IDLE if self.manual else State.LOOK)
 
 
 def _quaternion_matrix(x, y, z, w):
