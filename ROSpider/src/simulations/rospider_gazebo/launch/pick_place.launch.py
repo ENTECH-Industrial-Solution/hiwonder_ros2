@@ -58,6 +58,7 @@ def generate_launch_description():
                 '-name', name,
                 '-x', str(pose[0]), '-y', str(pose[1]), '-z', str(pose[2]),
             ],
+            condition=IfCondition(LaunchConfiguration('scene')),
         )
         for name, pose in SCENE
     ]
@@ -88,7 +89,10 @@ def generate_launch_description():
         executable='apriltag_detect.py',
         name='apriltag_detect',
         output='screen',
-        parameters=[apriltag_config, {'use_sim_time': True}],
+        parameters=[apriltag_config,
+                    {'use_sim_time': True,
+                     'tune': ParameterValue(
+                         LaunchConfiguration('tune'), value_type=bool)}],
         condition=IfCondition(LaunchConfiguration('tags')),
     )
 
@@ -148,7 +152,8 @@ def generate_launch_description():
         DeclareLaunchArgument('auto_start', default_value='true'),
         DeclareLaunchArgument(
             'tune', default_value='false',
-            description='open the HSV trackbar window in color_detect'),
+            description='open the tuning window(s): HSV trackbars in '
+                        'color_detect, the Tk tuner in apriltag_detect'),
         DeclareLaunchArgument(
             'detector', default_value='color', choices=['color', 'yolo'],
             description='which node publishes /yolo/object_detect'),
@@ -160,6 +165,12 @@ def generate_launch_description():
             description='init points the camera 52 deg down at the floor, '
                         'which is what picking needs; horizontal points it '
                         'straight ahead, which is what seeing a tag needs'),
+        DeclareLaunchArgument(
+            'scene', default_value='true',
+            description='spawn the pick pedestal and cubes. false is the '
+                        'tag-only demo: the spawn pose is 1 cm from the '
+                        'pedestal, so approach can only walk when it is '
+                        'absent'),
         gazebo,
         # The robot and its controllers need to exist before the cubes land on
         # the pedestal, or they drop through a world that is still loading.

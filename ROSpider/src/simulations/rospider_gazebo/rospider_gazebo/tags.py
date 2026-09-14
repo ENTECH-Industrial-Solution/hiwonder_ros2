@@ -47,6 +47,74 @@ BOARD_OFFSET_X = -0.12
 TAG_CENTRE_HEIGHT = 0.25
 POST_SIZE = (0.03, 0.03, TAG_CENTRE_HEIGHT - BOARD_FACE / 2.0)
 
+# The aruco DetectorParameters the tuner exposes, with OpenCV's stock values.
+# Names are snake_case so they can be YAML keys and ROS parameters; the
+# mapping to aruco's camelCase attributes is in detector_parameters().
+DETECTOR_DEFAULTS = {
+    'adaptive_thresh_win_size_min': 3,
+    'adaptive_thresh_win_size_max': 23,
+    'adaptive_thresh_win_size_step': 10,
+    'adaptive_thresh_constant': 7.0,
+    'min_marker_perimeter_rate': 0.03,
+    'polygonal_approx_accuracy_rate': 0.03,
+    'corner_refinement': 'none',
+}
+
+_CORNER_REFINEMENT = {
+    'none': cv2.aruco.CORNER_REFINE_NONE,
+    'subpix': cv2.aruco.CORNER_REFINE_SUBPIX,
+}
+
+
+def _odd_window(value):
+    """aruco's adaptive threshold wants an odd window of at least 3.
+
+    OpenCV bumps an even value itself, silently; doing it here means the
+    number the GUI shows is the number the detector uses.
+    """
+    value = max(3, int(value))
+    return value if value % 2 else value + 1
+
+
+def detector_parameters(values=None):
+    """A cv2.aruco.DetectorParameters from a DETECTOR_DEFAULTS-shaped dict.
+
+    Missing keys take the stock value; unknown keys raise, because a typo in
+    the YAML would otherwise be accepted and do nothing, which in a tuner
+    looks like "the slider is broken".
+    """
+    values = dict(DETECTOR_DEFAULTS, **(values or {}))
+    unknown = set(values) - set(DETECTOR_DEFAULTS)
+    if unknown:
+        raise KeyError(f'unknown detector parameter(s): {sorted(unknown)}')
+    refinement = str(values['corner_refinement'])
+    if refinement not in _CORNER_REFINEMENT:
+        raise ValueError(
+            f'corner_refinement must be one of '
+            f'{sorted(_CORNER_REFINEMENT)}, not {refinement!r}')
+
+    win_min = _odd_window(values['adaptive_thresh_win_size_min'])
+    win_max = _odd_window(values['adaptive_thresh_win_size_max'])
+    if win_min > win_max:
+        # aruco steps the adaptive threshold window from min to max; a min
+        # above max makes it try zero scales, so the tag just silently stops
+        # being found rather than raising anywhere.
+        raise ValueError(
+            f'adaptive_thresh_win_size_min ({win_min}) must not exceed '
+            f'adaptive_thresh_win_size_max ({win_max})')
+
+    params = cv2.aruco.DetectorParameters()
+    params.adaptiveThreshWinSizeMin = win_min
+    params.adaptiveThreshWinSizeMax = win_max
+    params.adaptiveThreshWinSizeStep = max(
+        1, int(values['adaptive_thresh_win_size_step']))
+    params.adaptiveThreshConstant = float(values['adaptive_thresh_constant'])
+    params.minMarkerPerimeterRate = float(values['min_marker_perimeter_rate'])
+    params.polygonalApproxAccuracyRate = float(
+        values['polygonal_approx_accuracy_rate'])
+    params.cornerRefinementMethod = _CORNER_REFINEMENT[refinement]
+    return params
+
 
 def object_points(size=TAG_SIZE):
     """The tag's four corners in the tag frame, metres, float32.
@@ -74,14 +142,16 @@ def generate_tag_image(tag_id, module_px=40):
     return image
 
 
-def detect_tags(gray):
+def detect_tags(gray, params=None):
     """[(tag_id, corners)] for every tag36h11 in a grayscale image.
 
     corners is (4, 2) float32 in the same order as object_points().
+    `params` is a cv2.aruco.DetectorParameters, see detector_parameters();
+    None means OpenCV's stock values.
     """
     detector = cv2.aruco.ArucoDetector(
         cv2.aruco.getPredefinedDictionary(_DICT_ID),
-        cv2.aruco.DetectorParameters())
+        params if params is not None else detector_parameters())
     corners, ids, _ = detector.detectMarkers(gray)
     if ids is None:
         return []

@@ -176,3 +176,69 @@ def test_committed_texture_is_detectable():
         cv2.IMREAD_GRAYSCALE)
     assert image is not None, 'worlds/textures/tag_0.png is missing'
     assert [tag_id for tag_id, _ in tags.detect_tags(image)] == [0]
+
+
+def test_detector_parameters_defaults_match_stock_aruco():
+    # The GUI shows these as the starting point, so they must be exactly
+    # what detect_tags used before parameters existed at all.
+    stock = cv2.aruco.DetectorParameters()
+    built = tags.detector_parameters()
+    assert built.adaptiveThreshWinSizeMin == stock.adaptiveThreshWinSizeMin
+    assert built.adaptiveThreshWinSizeMax == stock.adaptiveThreshWinSizeMax
+    assert built.adaptiveThreshWinSizeStep == stock.adaptiveThreshWinSizeStep
+    assert built.adaptiveThreshConstant == stock.adaptiveThreshConstant
+    assert built.minMarkerPerimeterRate == stock.minMarkerPerimeterRate
+    assert built.polygonalApproxAccuracyRate == stock.polygonalApproxAccuracyRate
+    assert built.cornerRefinementMethod == cv2.aruco.CORNER_REFINE_NONE
+
+
+def test_detector_parameters_maps_every_key():
+    built = tags.detector_parameters({
+        'adaptive_thresh_win_size_min': 5,
+        'adaptive_thresh_win_size_max': 41,
+        'adaptive_thresh_win_size_step': 4,
+        'adaptive_thresh_constant': 9.5,
+        'min_marker_perimeter_rate': 0.05,
+        'polygonal_approx_accuracy_rate': 0.08,
+        'corner_refinement': 'subpix',
+    })
+    assert built.adaptiveThreshWinSizeMin == 5
+    assert built.adaptiveThreshWinSizeMax == 41
+    assert built.adaptiveThreshWinSizeStep == 4
+    assert built.adaptiveThreshConstant == 9.5
+    assert built.minMarkerPerimeterRate == 0.05
+    assert built.polygonalApproxAccuracyRate == 0.08
+    assert built.cornerRefinementMethod == cv2.aruco.CORNER_REFINE_SUBPIX
+
+
+def test_detector_parameters_rounds_even_windows_up():
+    # aruco's adaptive threshold needs odd windows; an even slider value
+    # must not silently become something other than the next odd one.
+    built = tags.detector_parameters({'adaptive_thresh_win_size_min': 4,
+                                      'adaptive_thresh_win_size_max': 20})
+    assert built.adaptiveThreshWinSizeMin == 5
+    assert built.adaptiveThreshWinSizeMax == 21
+
+
+def test_detector_parameters_rejects_unknown_keys():
+    import pytest
+    with pytest.raises(KeyError):
+        tags.detector_parameters({'adaptive_thresh_constant': 7.0,
+                                  'made_up': 1})
+    with pytest.raises(ValueError):
+        tags.detector_parameters({'corner_refinement': 'contour'})
+
+
+def test_detector_parameters_rejects_min_window_above_max():
+    # A min above max makes aruco try zero scales; the tag then just
+    # silently stops being found, so this must raise instead.
+    import pytest
+    with pytest.raises(ValueError):
+        tags.detector_parameters({'adaptive_thresh_win_size_min': 41,
+                                  'adaptive_thresh_win_size_max': 21})
+
+
+def test_detect_tags_accepts_explicit_parameters():
+    image = tags.generate_tag_image(3)
+    params = tags.detector_parameters({'corner_refinement': 'subpix'})
+    assert [tag_id for tag_id, _ in tags.detect_tags(image, params)] == [3]

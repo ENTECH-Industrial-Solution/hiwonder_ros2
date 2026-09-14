@@ -19,11 +19,61 @@ apriltag_detect:
     # clean solve and a genuinely ambiguous one.
     max_reproj_error_px: 3.0
 
+    # cv2.aruco.DetectorParameters, OpenCV's stock values. Live sliders in
+    # the tuner (tune:=true); the names map onto aruco's camelCase fields in
+    # rospider_gazebo/tags.py. Window sizes must be odd; even ones are
+    # rounded up.
+    detector:
+      adaptive_thresh_win_size_min: 3
+      adaptive_thresh_win_size_max: 23
+      adaptive_thresh_win_size_step: 10
+      adaptive_thresh_constant: 7.0
+      min_marker_perimeter_rate: 0.03
+      polygonal_approx_accuracy_rate: 0.03
+      corner_refinement: none        # none | subpix
+
     publish_tf: true
     image_topic: /depth_cam/rgb/image_raw
 
     # The overlay costs a frame copy; turn it off for a headless run.
     draw: true
+
+    # Open the Tk tuning window. pick_place.launch.py sets this from tune:=.
+    tune: false
+    # The tuner's Save writes here and the node overlays it on this file at
+    # startup, key by key. Delete the file to get back to exactly this YAML.
+    tuned_path: ~/.ros/apriltag_tuned.json
+
+    # ---- behaviours: what the robot does about a tag it can see ----------
+    # Off unless switched on in the tuner (or here). Never saved to the
+    # tuned JSON, so a file left behind cannot make the robot walk on its
+    # own during some other demo.
+    behaviors_enabled: false
+
+    # Where remembered tag poses live. The camera is on the wrist, so a
+    # held cube hides the tag during CARRY; approach/place then steer by the
+    # last pose seen, mapped through TF from this frame. '' disables memory.
+    # odom is ground truth in the simulator; on a real robot use map.
+    memory_frame: odom
+
+    control:
+      max_linear: 0.05        # m/s, the same ceiling nav2_params.yaml uses
+      max_angular: 0.3        # rad/s
+      kp_yaw: 1.5             # rad/s per metre the tag is off-centre
+      kp_dist: 0.4            # m/s per metre of range error
+      yaw_deadband: 0.02      # m of lateral offset counted as centred
+      dist_deadband: 0.03     # m of range error counted as arrived
+      lost_timeout: 0.5       # s without the tag before cmd_vel is released
+      place_height: 0.055     # m above the pedestal top, = drop_slots z - 0.08
+      turn_first_rad: 0.35    # rad; beyond this bearing the robot turns in place first
+
+    # One row per tag id. action: none | approach | place | stop.
+    # standoff is the range from base_footprint to the tag, along the
+    # robot's heading, in metres, where approach/place stop -- so it does
+    # not depend on the arm pose. place then calls /pick_and_place/place
+    # with the station's pedestal top, so ~/pick something first.
+    behaviors:
+      tag0: {action: none, standoff: 0.4}
 
     # Where pick_place.launch.py spawns tag_station_<id> models, in the world
     # frame: [x, y, yaw]. The key names the tag id. The node never reads this;
