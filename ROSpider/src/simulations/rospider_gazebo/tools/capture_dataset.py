@@ -67,13 +67,20 @@ WORLD_FRAME = 'odom'
 
 
 def set_pose(world, name, position, yaw, attempts=3):
-    """Move a model. Raises once the retries are exhausted.
+    """Move a model. Returns True if it took, False if it did not.
 
-    A pose that did not take would produce a correctly formatted label for the
-    wrong place, which is worse than a crash: nothing downstream can detect
-    it. So failure is still fatal -- but not on the first timeout. gz's
-    service call times out occasionally under load, and losing a 400-sample
-    run to one transient timeout is its own kind of failure.
+    NOT fatal, and that is a consequence of reading the pose back. Under the
+    original design -- label from the commanded pose -- a set_pose that
+    silently failed produced a correctly formatted label for the wrong place,
+    which nothing downstream could detect, so it had to abort. Now the label
+    comes from where the object actually is, so a failed move just means this
+    sample is less varied than intended. The label is still true.
+
+    That matters because gz's service call degrades over a long run: this
+    tool spawns a CLI process per call, thousands across a run, and a
+    400-sample capture died at 229 on "Service call timed out" even with
+    three retries. Losing the whole run over a sample that would have been
+    correct anyway is the worse failure.
     """
     request = (f'name: "{name}", position: {{x: {position[0]}, '
                f'y: {position[1]}, z: {position[2]}}}, '
@@ -86,14 +93,10 @@ def set_pose(world, name, position, yaw, attempts=3):
              '--timeout', '5000', '--req', request],
             capture_output=True, text=True)
         if result.returncode == 0 and 'true' in result.stdout:
-            return
+            return True
         if attempt + 1 < attempts:
             time.sleep(1.0)
-    raise RuntimeError(
-        f'set_pose failed for {name} after {attempts} attempts: '
-        f'{result.stdout}{result.stderr}\n'
-        'Is the simulation running, and is install/local_setup.bash '
-        'sourced so gz can find its config?')
+    return False
 
 
 _POSE_BLOCK = re.compile(
@@ -312,6 +315,14 @@ class CaptureNode(Node):
         return float(np.median(patch)) < expected - self.args.occlusion_tol
 
 
+def write_data_yaml(root, classes):
+    with open(os.path.join(root, 'data.yaml'), 'w') as handle:
+        handle.write(f'path: {root}\ntrain: images/train\nval: images/val\n'
+                     'names:\n')
+        for index, name in enumerate(classes):
+            handle.write(f'  {index}: {name}\n')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--samples', type=int, default=200)
@@ -331,6 +342,9 @@ def main():
     # it rather than being spawned interpenetrating it.
     parser.add_argument('--z', type=float, default=0.12)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--max-stuck', type=int, default=5,
+                        help='give up after this many samples in a row where '
+                             'no object could be moved')
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -343,16 +357,30 @@ def main():
     rclpy.init()
     node = CaptureNode(args)
     written = 0
+    stuck = 0
     try:
         node.wait_for_tf()
         for index in range(args.samples):
-            for model in OBJECTS:
+            moved = sum(
                 set_pose(args.world,
                          model,
                          (random.uniform(*args.x_range),
                           random.uniform(*args.y_range),
                           args.z),
                          random.uniform(-np.pi, np.pi))
+                for model in OBJECTS)
+            if moved:
+                stuck = 0
+            else:
+                # Nothing moved at all. One such sample is a hiccup; a run of
+                # them means the simulation is gone or wedged, and every
+                # further image would be a duplicate of the last.
+                stuck += 1
+                print(f'warning: no object moved ({stuck} in a row)')
+                if stuck >= args.max_stuck:
+                    print(f'giving up: {stuck} samples in a row with nothing '
+                          'moving. Is the simulation still running?')
+                    break
 
             # Where they ACTUALLY are, once they have stopped moving. The
             # commanded pose is a request, not a fact.
@@ -384,11 +412,11 @@ def main():
     finally:
         node.destroy_node()
         rclpy.try_shutdown()
+        # Written in `finally` so an interrupted run still leaves a usable
+        # dataset: without it, everything captured before the failure is a
+        # directory of images ultralytics cannot be pointed at.
+        write_data_yaml(root, classes)
 
-    with open(os.path.join(root, 'data.yaml'), 'w') as f:
-        f.write(f'path: {root}\ntrain: images/train\nval: images/val\nnames:\n')
-        for i, name in enumerate(classes):
-            f.write(f'  {i}: {name}\n')
     print(f'wrote {written} samples and data.yaml to {root}')
 
 
