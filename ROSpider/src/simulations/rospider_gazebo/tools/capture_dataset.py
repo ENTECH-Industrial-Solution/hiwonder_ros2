@@ -5,7 +5,7 @@ Not installed and not part of any launch file. Start the simulation first,
 then run this from the package source tree:
 
     ros2 launch rospider_gazebo pick_place.launch.py auto_start:=false tags:=false
-    python3 tools/capture_dataset.py --samples 400 --out ~/datasets/cubes
+    python3 tools/capture_dataset.py --samples 50 --out ~/datasets/cubes
 
 The tool places the objects with Gazebo's own set_pose service and then READS
 BACK where they actually ended up. Trusting the commanded pose does not work:
@@ -325,7 +325,10 @@ def write_data_yaml(root, classes):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--samples', type=int, default=200)
+    # 50 is plenty for the simulator: 20 images at 100 epochs already reach
+    # mAP50 0.90 on the cubes (see tools/train_yolo.py). Hundreds only buy
+    # robustness against poses the small set happened to miss.
+    parser.add_argument('--samples', type=int, default=50)
     parser.add_argument('--out', required=True)
     parser.add_argument('--world', default='rospider_room')
     parser.add_argument('--val-split', type=float, default=0.2)
