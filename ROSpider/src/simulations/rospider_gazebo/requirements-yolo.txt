@@ -1,0 +1,42 @@
+# Optional: only the detector:=yolo path needs these. They are deliberately
+# NOT in package.xml -- torch is about 3 GB, and the default detector:=color
+# path, colcon build, and every test must all work without it.
+#
+# This machine's python3 is PEP 668 externally-managed, and everything else
+# here (opencv-python 5.0, ultralytics) is already installed to the user site,
+# which is what a node launched by ros2 launch can see. A venv would not be on
+# a launched node's path. So:
+#
+#   pip install --user --break-system-packages -r requirements-yolo.txt
+#
+# torch is NOT listed below, because which build you need depends on the GPU.
+# The development machine has an RTX 5060, which is Blackwell (sm_120); the
+# default PyPI wheel is not built for it and fails at the first CUDA call:
+#
+#   pip install --user --break-system-packages torch torchvision \
+#       --index-url https://download.pytorch.org/whl/cu128
+#
+# CPU-only works everywhere and is much smaller, just slower. It is fine for
+# inference in the simulator and painful for training:
+#
+#   pip install --user --break-system-packages torch torchvision \
+#       --index-url https://download.pytorch.org/whl/cpu
+#
+# Set yolo_detect's `device` parameter to 'cpu' to force CPU inference.
+#
+# INSTALL torch FIRST, then this file. Order matters: the torch install pulls
+# in numpy 2.x, and the numpy pin below has to win.
+ultralytics>=8.3
+
+# NOT optional, and not a preference. ROS Jazzy's cv_bridge is a C++ extension
+# compiled against numpy 1.x, and a numpy 2 in the user site shadows the
+# system 1.26.4 it needs. Installing torch pulls numpy 2.5.3 in, and then
+# `import cv_bridge` fails outright -- which breaks color_detect and
+# pick_and_place too, not just the YOLO path. Measured: with numpy 2.5.3 every
+# camera node in this package dies at import; with 1.26.4 cv2 5.0, cv_bridge,
+# torch with CUDA and ultralytics all work together.
+#
+# pip will warn that opencv-python 5.0 declares numpy>=2. Ignore it: that
+# requirement is not enforced at runtime and cv2 5.0.0 works fine against
+# 1.26.4, which is what this workspace has always run.
+numpy<2

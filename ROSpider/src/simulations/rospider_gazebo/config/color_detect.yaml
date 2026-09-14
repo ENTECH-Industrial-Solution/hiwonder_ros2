@@ -18,6 +18,26 @@ color_detect:
     min_area_px: 300
     kernel_px: 5
     colors: ['red', 'green', 'blue']
+
+    # tune:=true opens an OpenCV trackbar window for adjusting the bounds
+    # below while detection keeps running and publishing. Off by default:
+    # it needs a display and moves rclpy.spin onto a worker thread.
+    #   the 'colour' slider has one slot past the last colour: sliding onto
+    #   it adds a new colour (n does the same), s = save to tuned_path,
+    #   r = revert to this file, y = print a paste-ready YAML block,
+    #   q = close the window (node keeps detecting)
+    # A colour added there is a full detection class: its name becomes
+    # ObjectInfo.class_name on /yolo/object_detect. It starts with one HSV
+    # band; only reds wrap the hue origin and red is already here, so a
+    # wrapping colour needs its second band written into this file by hand.
+    tune: false
+    # Written by 's' and read back at startup if it exists. It OVERRIDES the
+    # bounds in this file, and the node logs loudly when it does — a
+    # forgotten tuned file silently shadowing this one is the failure worth
+    # guarding against. Delete it to go back to the values here; use 'y' to
+    # move a value you want to keep back into this file, which is what gets
+    # committed.
+    tuned_path: '~/.ros/color_detect_tuned.json'
     red:
       lower: [0, 120, 80, 170, 120, 80]
       upper: [10, 255, 255, 179, 255, 255]

@@ -8,6 +8,7 @@ install(DIRECTORY config launch maps models rviz urdf worlds
   DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_place.py
+                 scripts/apriltag_detect.py scripts/yolo_detect.py
   DESTINATION lib/${PROJECT_NAME})
 
 # rospider_gazebo.maps: map name -> <workspace>/maps path, used by the launch files
@@ -18,6 +19,16 @@ if(BUILD_TESTING)
   # APPEND_ENV puts the package source on PYTHONPATH so `from rospider_gazebo
   # import arm_ik` resolves without depending on the install space being sourced.
   ament_add_pytest_test(test_arm_ik test/test_arm_ik.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_apriltag test/test_apriltag.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_labelling test/test_labelling.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_tag_settings test/test_tag_settings.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_tag_behavior test/test_tag_behavior.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_yolo_settings test/test_yolo_settings.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 

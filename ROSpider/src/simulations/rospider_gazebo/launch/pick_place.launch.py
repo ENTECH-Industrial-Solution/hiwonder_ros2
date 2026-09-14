@@ -4,8 +4,9 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -28,12 +29,21 @@ def generate_launch_description():
         scene_params = yaml.safe_load(f)['pick_and_place']['ros__parameters']['scene']
     SCENE = tuple(scene_params.items())
 
+    # Tag stations come from config/apriltag.yaml, never from the world
+    # file: the world and the map belong to the user, so nothing here
+    # writes a coordinate into either. [x, y, yaw] in the world frame,
+    # and the key names the tag id.
+    apriltag_config = os.path.join(pkg, 'config', 'apriltag.yaml')
+    with open(apriltag_config) as f:
+        tag_params = yaml.safe_load(f)['apriltag_detect']['ros__parameters']
+    STATIONS = tuple(sorted(tag_params.get('stations', {}).items()))
+
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'gazebo.launch.py')),
         launch_arguments={
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
-            'arm_pose': 'init',
+            'arm_pose': LaunchConfiguration('arm_pose'),
         }.items(),
     )
 
@@ -48,9 +58,43 @@ def generate_launch_description():
                 '-name', name,
                 '-x', str(pose[0]), '-y', str(pose[1]), '-z', str(pose[2]),
             ],
+            condition=IfCondition(LaunchConfiguration('scene')),
         )
         for name, pose in SCENE
     ]
+
+    station_spawns = [
+        Node(
+            package='ros_gz_sim',
+            executable='create',
+            name=f'spawn_tag_{name}',
+            output='screen',
+            arguments=[
+                '-file', os.path.join(
+                    pkg, 'models', f'tag_station_{index}', 'model.sdf'),
+                '-name', f'tag_station_{index}',
+                '-x', str(pose[0]), '-y', str(pose[1]), '-Y', str(pose[2]),
+            ],
+            condition=IfCondition(LaunchConfiguration('tags')),
+        )
+        # The id comes from the key, not from the position in the list: a
+        # config naming only station2 must still spawn tag_station_2 and its
+        # tag_2 texture, not the first model on disk.
+        for name, pose in STATIONS
+        for index in [int(name.removeprefix('station'))]
+    ]
+
+    tag_detector = Node(
+        package='rospider_gazebo',
+        executable='apriltag_detect.py',
+        name='apriltag_detect',
+        output='screen',
+        parameters=[apriltag_config,
+                    {'use_sim_time': True,
+                     'tune': ParameterValue(
+                         LaunchConfiguration('tune'), value_type=bool)}],
+        condition=IfCondition(LaunchConfiguration('tags')),
+    )
 
     detector = Node(
         package='rospider_gazebo',
@@ -58,7 +102,26 @@ def generate_launch_description():
         name='color_detect',
         output='screen',
         parameters=[os.path.join(pkg, 'config', 'color_detect.yaml'),
-                    {'use_sim_time': True}],
+                    {'use_sim_time': True,
+                     # value_type=bool matters: a bare LaunchConfiguration
+                     # arrives as the string "false", which is truthy.
+                     'tune': ParameterValue(
+                         LaunchConfiguration('tune'), value_type=bool)}],
+        condition=IfCondition(PythonExpression(
+            ["'", LaunchConfiguration('detector'), "' == 'color'"])),
+    )
+
+    yolo_detector = Node(
+        package='rospider_gazebo',
+        executable='yolo_detect.py',
+        name='yolo_detect',
+        output='screen',
+        parameters=[os.path.join(pkg, 'config', 'yolo.yaml'),
+                    {'use_sim_time': True,
+                     'tune': ParameterValue(
+                         LaunchConfiguration('tune'), value_type=bool)}],
+        condition=IfCondition(PythonExpression(
+            ["'", LaunchConfiguration('detector'), "' == 'yolo'"])),
     )
 
     picker = Node(
@@ -89,8 +152,32 @@ def generate_launch_description():
             default_value=os.path.join(pkg, 'worlds', 'rospider_room.sdf')),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('auto_start', default_value='true'),
+        DeclareLaunchArgument(
+            'tune', default_value='false',
+            description='open the tuning window(s): HSV trackbars in '
+                        'color_detect, the Tk tuners in yolo_detect and '
+                        'apriltag_detect'),
+        DeclareLaunchArgument(
+            'detector', default_value='color', choices=['color', 'yolo'],
+            description='which node publishes /yolo/object_detect'),
+        DeclareLaunchArgument(
+            'tags', default_value='true',
+            description='run apriltag_detect and spawn the tag stations'),
+        DeclareLaunchArgument(
+            'arm_pose', default_value='init', choices=['init', 'horizontal'],
+            description='init points the camera 52 deg down at the floor, '
+                        'which is what picking needs; horizontal points it '
+                        'straight ahead, which is what seeing a tag needs'),
+        DeclareLaunchArgument(
+            'scene', default_value='true',
+            description='spawn the pick pedestal and cubes. false is the '
+                        'tag-only demo: the spawn pose is 1 cm from the '
+                        'pedestal, so approach can only walk when it is '
+                        'absent'),
         gazebo,
         # The robot and its controllers need to exist before the cubes land on
         # the pedestal, or they drop through a world that is still loading.
-        TimerAction(period=5.0, actions=spawns + [detector, picker, rviz]),
+        TimerAction(period=5.0, actions=spawns + station_spawns
+                    + [detector, yolo_detector, tag_detector,
+                       picker, rviz]),
     ])
