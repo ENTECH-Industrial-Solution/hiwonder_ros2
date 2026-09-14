@@ -33,3 +33,10 @@ yolo_detect:
 
     image_topic: /depth_cam/rgb/image_raw
     draw: true
+
+    # Open the Tk tuning window (confidence slider + one checkbox per
+    # class). pick_place.launch.py sets this from tune:=. Save writes conf
+    # and classes to tuned_path, which overlays this file at startup;
+    # delete the file to get back to exactly this YAML.
+    tune: false
+    tuned_path: ~/.ros/yolo_detect_tuned.json

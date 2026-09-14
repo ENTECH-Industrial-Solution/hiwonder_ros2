@@ -10,17 +10,27 @@ The two detectors are alternatives, never both at once:
 
     ros2 launch rospider_gazebo pick_place.launch.py detector:=yolo
 
+With tune:=true the node opens a Tk window (rospider_gazebo/tkview.py, the
+same helpers apriltag_detect uses): the live detections, a confidence
+slider and one checkbox per class the model knows. Save writes the two
+values to ~/.ros/yolo_detect_tuned.json, which overrides config/yolo.yaml on
+the next launch the way color_detect's and apriltag_detect's tuned files do.
+
 ultralytics and torch are imported inside __init__, not at module scope, and
 are not declared in package.xml. The colour path, colcon build and every test
 must all work on a machine that has never installed them, so a missing torch
 has to produce one clear sentence rather than an import traceback at launch.
 """
 
+import json
 import logging
 import os
 import queue
 import threading
 import time
+import tkinter as tk
+from pathlib import Path
+from tkinter import ttk
 
 import cv2
 import numpy as np
@@ -28,8 +38,11 @@ import rclpy
 from cv_bridge import CvBridge
 from interfaces.msg import ObjectInfo, ObjectsInfo
 from rclpy.node import Node
+from rospider_gazebo import tkview, yolo_settings
 from rospider_gazebo.ros_image import to_image_msg
 from sensor_msgs.msg import Image
+
+TUNE_TITLE = 'yolo_detect tune'
 
 
 def _package_dir():
@@ -109,13 +122,25 @@ class YoloDetectNode(Node):
             raise ValueError('yolo_detect needs a model_path; see '
                              'config/yolo.yaml')
         self.task = str(self._param('task', 'detect'))
-        self.conf = float(self._param('conf', 0.5))
         self.device = str(self._param('device', ''))
         self.draw = bool(self._param('draw', True))
-        allow = self._param('classes', [])
-        self.allow = set(allow) if allow else None
+        self.tune = bool(self._param('tune', False))
+        self.tuned_path = Path(os.path.expanduser(
+            str(self._param('tuned_path', '~/.ros/yolo_detect_tuned.json'))))
         image_topic = str(self._param('image_topic',
                                       '/depth_cam/rgb/image_raw'))
+
+        # Shared with the tuner thread: it reads the last drawn frame and
+        # the counters, and writes conf/classes through apply_settings().
+        self._lock = threading.Lock()
+        self.latest_frame = None
+        self.last_count = 0
+        self.last_ms = 0.0
+        self.baseline = yolo_settings.merge(yolo_settings.defaults(), {
+            'conf': self._param('conf', 0.5),
+            'classes': self._param('classes', []) or []})
+        self.apply_settings(json.loads(json.dumps(self.baseline)))
+        self._load_tuned()
 
         self.model = _load_yolo(_resolve_model(model_path), self.task)
         self._warm_up()
@@ -171,6 +196,65 @@ class YoloDetectNode(Node):
         value = self.get_parameter(name).value
         return default if value is None else value
 
+    # ------------------------------------------------------------- settings
+
+    def apply_settings(self, settings):
+        """Adopt conf and the class filter as the live values."""
+        with self._lock:
+            self.settings = settings
+            self.conf = float(settings['conf'])
+            allow = settings['classes']
+            self.allow = set(allow) if allow else None
+
+    def _load_tuned(self):
+        """Overlay the tuned JSON on the YAML baseline, if the file exists.
+
+        One-way and logged, as in color_detect: the YAML is the committed
+        truth, the JSON a tuning override, and saying which is live keeps a
+        forgotten JSON from silently shadowing the YAML.
+        """
+        if not self.tuned_path.is_file():
+            self.get_logger().info(
+                f'settings from config/yolo.yaml '
+                f'(no tuned file at {self.tuned_path})')
+            return
+        try:
+            with self.tuned_path.open() as handle:
+                override = json.load(handle)
+            self.apply_settings(yolo_settings.merge(self.baseline, override))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self.get_logger().error(
+                f'ignoring unreadable tuned file {self.tuned_path}: {exc}; '
+                'using config/yolo.yaml')
+            return
+        self.get_logger().warn(
+            f'settings OVERRIDDEN by {self.tuned_path} '
+            '(delete it to go back to config/yolo.yaml)')
+
+    def save_tuned(self):
+        with self._lock:
+            settings = json.loads(json.dumps(self.settings))
+        try:
+            self.tuned_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.tuned_path.open('w') as handle:
+                json.dump(settings, handle, indent=2)
+                handle.write('\n')
+        except OSError as exc:
+            message = f'could not save {self.tuned_path}: {exc}'
+            self.get_logger().error(message)
+            return message
+        message = f'saved {self.tuned_path}'
+        self.get_logger().info(message)
+        return message
+
+    def revert(self):
+        self.apply_settings(json.loads(json.dumps(self.baseline)))
+        self.get_logger().info('reverted to the config/yolo.yaml baseline')
+
+    def yaml_block(self):
+        with self._lock:
+            return yolo_settings.yaml_block(self.settings)
+
     def image_callback(self, msg):
         try:
             self.frames.put_nowait(msg)
@@ -192,14 +276,18 @@ class YoloDetectNode(Node):
 
     def _process_image(self, msg):
         frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
-        kwargs = {'conf': self.conf, 'verbose': False}
+        with self._lock:
+            conf, allow = self.conf, self.allow
+        kwargs = {'conf': conf, 'verbose': False}
         if self.device:
             kwargs['device'] = self.device
+        started = time.monotonic()
         result = self.model(frame, **kwargs)[0]
+        elapsed_ms = (time.monotonic() - started) * 1000.0
 
         objects = ObjectsInfo()
         for name, box, score in self._detections(result):
-            if self.allow is not None and name not in self.allow:
+            if allow is not None and name not in allow:
                 continue
             info = ObjectInfo()
             info.class_name = name
@@ -216,6 +304,10 @@ class YoloDetectNode(Node):
         self.objects_pub.publish(objects)
         if self.draw:
             self.image_pub.publish(to_image_msg(frame, msg.header))
+        with self._lock:
+            self.latest_frame = frame
+            self.last_count = len(objects.objects)
+            self.last_ms = elapsed_ms
 
     def _detections(self, result):
         """(class_name, box, score) per detection.
@@ -258,12 +350,131 @@ class YoloDetectNode(Node):
         self.worker.join(timeout=1.0)
         super().destroy_node()
 
+    # ---------------------------------------------------------------- tuner
+
+    def run_tuner(self):
+        """Tk window. Runs on the main thread; Tk requires that.
+
+        Deliberately small -- a workshop needs "how sure must the model be"
+        and "which classes may the picker see", nothing else. Detection
+        keeps running throughout, so a change shows on the overlay and on
+        /yolo/object_detect at once. Closing the window leaves the node
+        running with the last values.
+        """
+        root = tk.Tk()
+        root.title(TUNE_TITLE)
+
+        image_label = ttk.Label(root)
+        image_label.grid(row=0, column=0, padx=6, pady=6, sticky='n')
+        side = ttk.Frame(root)
+        side.grid(row=0, column=1, padx=6, pady=6, sticky='n')
+
+        with self._lock:
+            settings = json.loads(json.dumps(self.settings))
+        names = sorted(self.model.names.values())
+        message = tk.StringVar()
+
+        conf = tk.DoubleVar(value=float(settings['conf']))
+        tkview.LabeledScale(side, 'confidence', conf, 0.05, 0.95, 0.05,
+                            lambda: apply()).grid(row=0, column=0,
+                                                  sticky='ew')
+
+        # One checkbox per class the model knows. All ticked means the
+        # filter is off (classes: [] -> publish everything), which is what
+        # the YAML default says.
+        classes_box = ttk.LabelFrame(side, text='classes to publish')
+        classes_box.grid(row=1, column=0, sticky='ew', pady=(6, 0))
+        ticked = {}
+        allowed = set(settings['classes']) or set(names)
+        for i, name in enumerate(names):
+            var = tk.BooleanVar(value=name in allowed)
+            ticked[name] = var
+            ttk.Checkbutton(classes_box, text=name, variable=var,
+                            command=lambda: apply()).grid(
+                row=i, column=0, sticky='w')
+
+        status = ttk.Label(side, text='', wraplength=260, justify='left')
+        status.grid(row=2, column=0, sticky='w', pady=(6, 0))
+
+        def read_widgets():
+            chosen = [name for name in names if ticked[name].get()]
+            return yolo_settings.merge(yolo_settings.defaults(), {
+                'conf': conf.get(),
+                # Everything ticked is "no filter", not a list of all
+                # names: a model swapped later would otherwise be filtered
+                # down to this model's classes.
+                'classes': [] if len(chosen) == len(names) else chosen})
+
+        def apply():
+            try:
+                self.apply_settings(read_widgets())
+            except (ValueError, KeyError, tk.TclError) as exc:
+                message.set(f'not applied: {exc}')
+                return
+            message.set('')
+
+        def do_revert():
+            self.revert()
+            with self._lock:
+                base = json.loads(json.dumps(self.settings))
+            conf.set(base['conf'])
+            allowed = set(base['classes']) or set(names)
+            for name, var in ticked.items():
+                var.set(name in allowed)
+            message.set('reverted to config/yolo.yaml')
+
+        def do_yaml():
+            self.get_logger().info('current settings as YAML:\n'
+                                   + self.yaml_block())
+            message.set('YAML printed to the terminal')
+
+        buttons = ttk.Frame(side)
+        buttons.grid(row=3, column=0, sticky='ew', pady=(6, 0))
+        ttk.Button(buttons, text='Save',
+                   command=lambda: message.set(self.save_tuned())).pack(
+            side='left')
+        ttk.Button(buttons, text='Revert', command=do_revert).pack(side='left')
+        ttk.Button(buttons, text='Print YAML', command=do_yaml).pack(side='left')
+        ttk.Label(side, textvariable=message, wraplength=260).grid(
+            row=4, column=0, sticky='w')
+
+        def refresh():
+            with self._lock:
+                frame = self.latest_frame
+                count, ms = self.last_count, self.last_ms
+                live_conf = self.conf
+                allow = self.allow
+            if frame is not None:
+                photo = tkview.photo_from_bgr(frame)
+                image_label.configure(image=photo)
+                image_label.image = photo      # keep it alive
+            shown = 'all classes' if allow is None else ', '.join(sorted(allow))
+            status.configure(
+                text=f'{count} object(s), {ms:.0f} ms, conf >= {live_conf:.2f}'
+                     f'\npublishing: {shown}')
+            root.after(50, refresh)
+        refresh()
+
+        self.get_logger().info(
+            f'tuning window open: Save writes {self.tuned_path}, Revert '
+            'reloads config/yolo.yaml, Print YAML logs a paste-ready block')
+        tkview.mainloop_until_shutdown(root)
+        self.get_logger().info('tuning window closed; still detecting')
+
 
 def main():
     rclpy.init()
     node = YoloDetectNode()
     try:
-        rclpy.spin(node)
+        if node.tune:
+            # Tk must own the main thread, so spin moves to a worker.
+            spinner = threading.Thread(target=rclpy.spin, args=(node,),
+                                       daemon=True)
+            spinner.start()
+            node.run_tuner()
+            spinner.join()
+        else:
+            rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:

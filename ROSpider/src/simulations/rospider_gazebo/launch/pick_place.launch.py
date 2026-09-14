@@ -117,7 +117,9 @@ def generate_launch_description():
         name='yolo_detect',
         output='screen',
         parameters=[os.path.join(pkg, 'config', 'yolo.yaml'),
-                    {'use_sim_time': True}],
+                    {'use_sim_time': True,
+                     'tune': ParameterValue(
+                         LaunchConfiguration('tune'), value_type=bool)}],
         condition=IfCondition(PythonExpression(
             ["'", LaunchConfiguration('detector'), "' == 'yolo'"])),
     )
@@ -153,7 +155,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'tune', default_value='false',
             description='open the tuning window(s): HSV trackbars in '
-                        'color_detect, the Tk tuner in apriltag_detect'),
+                        'color_detect, the Tk tuners in yolo_detect and '
+                        'apriltag_detect'),
         DeclareLaunchArgument(
             'detector', default_value='color', choices=['color', 'yolo'],
             description='which node publishes /yolo/object_detect'),
