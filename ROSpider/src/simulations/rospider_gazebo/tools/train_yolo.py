@@ -47,6 +47,12 @@ def main():
         sys.exit(f'{data} not found; capture_dataset.py writes one, and a '
                  'hand-labelled export needs one written by hand')
 
+    # Run from the dataset directory. ultralytics writes runs/ and downloads
+    # its base weights into the current working directory, and this tool is
+    # normally invoked from inside the package -- which left runs/, weights/
+    # and yolo11n.pt sitting in the source tree. Training artefacts belong
+    # with the dataset they came from, not in the repository.
+    os.chdir(os.path.dirname(data))
     result = YOLO(args.base).train(
         data=data, epochs=args.epochs, imgsz=args.imgsz, batch=args.batch,
         device=args.device, name=args.name)

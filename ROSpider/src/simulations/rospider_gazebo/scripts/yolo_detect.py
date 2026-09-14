@@ -37,8 +37,13 @@ def _package_dir():
     The package share directory, not this file's parent: in the install space
     scripts land in lib/rospider_gazebo while CMakeLists installs models/ to
     share/rospider_gazebo, so walking up from __file__ lands in the wrong
-    tree. With --symlink-install the share copy points back at the source, so
-    a model trained into models/yolo/ is picked up without rebuilding.
+    tree.
+
+    Note that --symlink-install links the files that existed at build time,
+    not the directory. A model trained into a models/yolo/ that did not exist
+    at the last build is NOT visible until `colcon build` is run again -- the
+    node then reports the share path as missing, which is confusing until you
+    know this.
     """
     try:
         from ament_index_python.packages import get_package_share_directory
