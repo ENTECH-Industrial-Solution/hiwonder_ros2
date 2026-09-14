@@ -41,6 +41,7 @@ import time
 import cv2
 import numpy as np
 import rclpy
+import rclpy.duration
 import tf2_ros
 from cv_bridge import CvBridge
 from rclpy.node import Node
@@ -65,26 +66,34 @@ CAMERA_FRAME = 'depth_cam_frame'
 WORLD_FRAME = 'odom'
 
 
-def set_pose(world, name, position, yaw):
-    """Move a model. Raises on failure.
+def set_pose(world, name, position, yaw, attempts=3):
+    """Move a model. Raises once the retries are exhausted.
 
     A pose that did not take would produce a correctly formatted label for the
-    wrong place, which is worse than a crash: nothing downstream can detect it.
+    wrong place, which is worse than a crash: nothing downstream can detect
+    it. So failure is still fatal -- but not on the first timeout. gz's
+    service call times out occasionally under load, and losing a 400-sample
+    run to one transient timeout is its own kind of failure.
     """
     request = (f'name: "{name}", position: {{x: {position[0]}, '
                f'y: {position[1]}, z: {position[2]}}}, '
                f'orientation: {{z: {np.sin(yaw / 2):.6f}, '
                f'w: {np.cos(yaw / 2):.6f}}}')
-    result = subprocess.run(
-        ['gz', 'service', '-s', f'/world/{world}/set_pose',
-         '--reqtype', 'gz.msgs.Pose', '--reptype', 'gz.msgs.Boolean',
-         '--timeout', '2000', '--req', request],
-        capture_output=True, text=True)
-    if result.returncode != 0 or 'true' not in result.stdout:
-        raise RuntimeError(
-            f'set_pose failed for {name}: {result.stdout}{result.stderr}\n'
-            'Is the simulation running, and is install/local_setup.bash '
-            'sourced so gz can find its config?')
+    for attempt in range(attempts):
+        result = subprocess.run(
+            ['gz', 'service', '-s', f'/world/{world}/set_pose',
+             '--reqtype', 'gz.msgs.Pose', '--reptype', 'gz.msgs.Boolean',
+             '--timeout', '5000', '--req', request],
+            capture_output=True, text=True)
+        if result.returncode == 0 and 'true' in result.stdout:
+            return
+        if attempt + 1 < attempts:
+            time.sleep(1.0)
+    raise RuntimeError(
+        f'set_pose failed for {name} after {attempts} attempts: '
+        f'{result.stdout}{result.stderr}\n'
+        'Is the simulation running, and is install/local_setup.bash '
+        'sourced so gz can find its config?')
 
 
 _POSE_BLOCK = re.compile(
@@ -123,17 +132,24 @@ def read_poses(world, names):
     return poses
 
 
-def wait_until_settled(world, names, tolerance=0.001, timeout=8.0):
+def wait_until_settled(node, world, names, tolerance=0.001, timeout=8.0):
     """Poll until two consecutive reads agree, then return the settled poses.
 
     A teleported cube keeps moving: it drops onto whatever is under it, slides
     and can tip onto an edge. Capturing before it stops pairs the image with a
     pose the object has already left.
+
+    `node` is spun between polls rather than plain sleeping. Settling takes a
+    couple of seconds per sample, and a node that stops spinning stops filling
+    its TF buffer; the next lookup then fails with ExtrapolationException
+    because the buffer has a hole where the wait was.
     """
     deadline = time.monotonic() + timeout
     previous = read_poses(world, names)
     while time.monotonic() < deadline:
-        time.sleep(0.25)
+        spin_until = time.monotonic() + 0.25
+        while time.monotonic() < spin_until:
+            rclpy.spin_once(node, timeout_sec=0.05)
         current = read_poses(world, names)
         if set(current) == set(names) and all(
                 np.linalg.norm(current[n][0] - previous[n][0]) < tolerance
@@ -166,7 +182,10 @@ class CaptureNode(Node):
         self.depth = None
         self.camera_matrix = None
 
-        self.tf_buffer = tf2_ros.Buffer()
+        # 30 s rather than the 10 s default: a sample takes a couple of
+        # seconds and a slow one must not age its own frame out of the cache.
+        self.tf_buffer = tf2_ros.Buffer(
+            cache_time=rclpy.duration.Duration(seconds=30.0))
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.create_subscription(Image, '/depth_cam/rgb/image_raw',
                                  self._on_rgb, 1)
@@ -220,15 +239,28 @@ class CaptureNode(Node):
             if (self.rgb is not None and self.rgb[0] != previous
                     and self.depth is not None
                     and self.camera_matrix is not None):
-                return self.rgb[1]
+                return self.rgb
             if time.monotonic() > deadline:
                 raise TimeoutError(
                     'no new camera frame; is the simulation running and is '
                     'something subscribed to the camera?')
 
-    def camera_from_world(self):
+    def camera_from_world(self, stamp=None):
+        """The world -> camera transform, at the stamp of the frame being
+        labelled.
+
+        Not "latest": the label describes one image, so it has to use the
+        camera pose at the moment that image was taken. Falls back to latest
+        if the buffer no longer holds that instant, which is correct enough
+        here because the robot and the arm do not move during a capture run.
+        """
+        when = rclpy.time.Time.from_msg(stamp) if stamp is not None \
+            else rclpy.time.Time()
+        if stamp is not None and not self.tf_buffer.can_transform(
+                CAMERA_FRAME, WORLD_FRAME, when):
+            when = rclpy.time.Time()
         tf = self.tf_buffer.lookup_transform(
-            CAMERA_FRAME, WORLD_FRAME, rclpy.time.Time())
+            CAMERA_FRAME, WORLD_FRAME, when)
         t = tf.transform.translation
         r = tf.transform.rotation
         matrix = np.eye(4)
@@ -310,9 +342,9 @@ def main():
 
             # Where they ACTUALLY are, once they have stopped moving. The
             # commanded pose is a request, not a fact.
-            settled = wait_until_settled(args.world, list(OBJECTS))
-            frame = node.wait_for_fresh_frame()
-            matrix = node.camera_from_world()
+            settled = wait_until_settled(node, args.world, list(OBJECTS))
+            stamp, frame = node.wait_for_fresh_frame()
+            matrix = node.camera_from_world(stamp)
 
             lines = []
             for model, (class_name, size) in OBJECTS.items():
