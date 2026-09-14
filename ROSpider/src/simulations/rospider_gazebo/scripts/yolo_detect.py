@@ -20,6 +20,7 @@ import logging
 import os
 import queue
 import threading
+import time
 
 import cv2
 import numpy as np
@@ -117,6 +118,7 @@ class YoloDetectNode(Node):
                                       '/depth_cam/rgb/image_raw'))
 
         self.model = _load_yolo(_resolve_model(model_path), self.task)
+        self._warm_up()
 
         # maxsize 2, and a full queue drops the frame rather than blocking.
         # Inference is slower than the 15 Hz camera, and a growing backlog
@@ -135,6 +137,29 @@ class YoloDetectNode(Node):
         self.get_logger().info(
             f'{model_path} ({self.task}) on {image_topic}, '
             f'classes {sorted(self.model.names.values())}')
+
+    def _warm_up(self):
+        """Run one inference on a blank frame before subscribing to anything.
+
+        The first inference compiles CUDA kernels and costs about 10 s on this
+        machine, against 19 ms for every one after it. Without this the node
+        advertises, starts receiving frames, and produces nothing for ten
+        seconds -- and pick_and_place's LOOK state gives up on a colour after
+        state_timeout, 15 s. That is exactly how a run with auto_start logged
+        "never saw red; skipping" while the same model, probed a minute later
+        on the same scene, detected red at 0.946 confidence.
+
+        Paying it here means the "ready" log line below is true when it is
+        printed.
+        """
+        started = time.monotonic()
+        blank = np.zeros((480, 640, 3), dtype=np.uint8)
+        kwargs = {'conf': self.conf, 'verbose': False}
+        if self.device:
+            kwargs['device'] = self.device
+        self.model(blank, **kwargs)
+        self.get_logger().info(
+            f'warmed up in {time.monotonic() - started:.1f}s')
 
     def _param(self, name, default):
         """Read a parameter, falling back when the YAML does not carry it.
