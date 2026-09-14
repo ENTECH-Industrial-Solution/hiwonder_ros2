@@ -477,6 +477,14 @@ pip install --user --break-system-packages torch torchvision     --index-url htt
 
 > ถ้ายังไม่ได้ลง โหนดจะตายพร้อมข้อความบอกวิธีลง ไม่ใช่ traceback ของ import — ตั้งใจให้เป็นแบบนั้น
 
+> ⚠️ **ต้องลง torch ก่อน แล้วค่อยลง `requirements-yolo.txt`** ลำดับสำคัญ เพราะการลง torch จะดึง numpy 2.x เข้ามาด้วย และไฟล์ requirements ตรึง `numpy<2` ไว้ ต้องให้อันหลังชนะ
+>
+> **ทำไมต้องตรึง numpy** `cv_bridge` ของ ROS Jazzy เป็น C++ extension ที่คอมไพล์กับ numpy 1.x พอ numpy 2 มาอยู่ที่ user site มันจะบัง numpy 1.26.4 ของระบบ แล้ว `import cv_bridge` พังทันที — **ทำให้ `color_detect` กับ `pick_and_place` ตายไปด้วย ไม่ใช่แค่ YOLO** วัดจริงแล้ว: numpy 2.5.3 = โหนดกล้องทุกตัวตายตั้งแต่ import, numpy 1.26.4 = cv2 5.0, cv_bridge, torch + CUDA, ultralytics ทำงานร่วมกันได้หมด
+>
+> pip จะเตือนว่า `opencv-python 5.0 requires numpy>=2` **ไม่ต้องสนใจ** ข้อกำหนดนั้นไม่ได้บังคับตอนรัน และ cv2 5.0.0 ทำงานกับ 1.26.4 ได้ปกติ ซึ่งเป็นสภาพที่ workspace นี้ใช้มาตลอด
+>
+> อาการเวลาเจอ: `ImportError: A module that was compiled using NumPy 1.x cannot be run in NumPy 2.x` แก้ด้วย `pip install --user --break-system-packages 'numpy<2'`
+
 ### ตั้งค่า
 
 `config/yolo.yaml`:
