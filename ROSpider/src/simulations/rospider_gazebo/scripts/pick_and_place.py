@@ -16,9 +16,10 @@ from cv_bridge import CvBridge
 from interfaces.msg import ObjectsInfo
 from interfaces.srv import SetString
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from rospider_gazebo import arm_ik
 from sensor_msgs.msg import CameraInfo, Image, JointState
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, String
 from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -155,6 +156,15 @@ class PickAndPlaceNode(Node):
             CameraInfo, '/depth_cam/depth/camera_info', self.info_callback, 1)
         self.create_subscription(
             JointState, '/joint_states', self.joint_callback, 10)
+
+        # For the mini game's mission node, which sequences ~/pick and
+        # ~/place and needs to know when each finished. Latched, so a late
+        # subscriber sees the current state at once.
+        latched = QoSProfile(depth=1,
+                             durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.state_pub = self.create_publisher(String, '~/state', latched)
+        self.result_pub = self.create_publisher(String, '~/result', latched)
+        self.state_pub.publish(String(data=self.state.value))
 
         self.create_service(SetString, '~/start', self.start_callback)
         self.create_service(SetString, '~/pick', self.pick_callback)
@@ -374,6 +384,7 @@ class PickAndPlaceNode(Node):
     def enter(self, state):
         self.get_logger().info(f'{self.state.value} -> {state.value}')
         self.state = state
+        self.state_pub.publish(String(data=state.value))
         self.state_entered = self.get_clock().now()
         self._carry_announced = False
         self.streak = 0
@@ -423,6 +434,8 @@ class PickAndPlaceNode(Node):
 
     def abandon(self, reason):
         self.get_logger().warn(f'{self.target_color}: {reason}; skipping')
+        self.result_pub.publish(
+            String(data=f'abandoned {self.target_color}: {reason}'))
         self.release_all()
         self.send_gripper(self.gripper_open)
         if self.target_color in self.remaining:
@@ -679,6 +692,7 @@ class PickAndPlaceNode(Node):
     def _on_retreat(self):
         if self.arrived():
             self.get_logger().info(f'{self.target_color} placed')
+            self.result_pub.publish(String(data=f'placed {self.target_color}'))
             if self.target_color in self.remaining:
                 self.remaining.remove(self.target_color)
             self.target_color = None

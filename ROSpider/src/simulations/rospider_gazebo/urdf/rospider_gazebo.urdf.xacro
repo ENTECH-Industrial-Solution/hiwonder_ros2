@@ -119,6 +119,11 @@
     <xacro:grasp_joint colour="red"/>
     <xacro:grasp_joint colour="green"/>
     <xacro:grasp_joint colour="blue"/>
+    <!-- The mini game's pastel cubes. Only one set is ever spawned, and the
+         plugin tolerates an absent child_model, so all six can be declared. -->
+    <xacro:grasp_joint colour="pink"/>
+    <xacro:grasp_joint colour="yellow"/>
+    <xacro:grasp_joint colour="sky"/>
   </gazebo>
 
   <!-- LD19-like 2D LiDAR. min range 0.2 m matches the real robot's laser filter

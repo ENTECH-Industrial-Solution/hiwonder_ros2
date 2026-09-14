@@ -667,6 +667,99 @@ python3 tools/train_yolo.py --data ~/datasets/cubes --name cubes
 
 `train_yolo.py` รับ path เดียวกัน ไม่ว่า dataset จะมาจากเครื่องมือข้างบนหรือจาก Roboflow / labelImg — ทั้งคู่ export เป็นโครงสร้าง YOLO เหมือนกัน ขอแค่มี `data.yaml` ที่บอกชื่อคลาสและโฟลเดอร์ train/val
 
+## 10. Mini game (หยิบ → ขนผ่านสนาม → วางตามป้าย)
+
+เกมสำหรับช่วงบ่ายของเวิร์กช็อป: หุ่นเริ่มที่ต้นโถง หยิบลูกบาศก์สีพาสเทล 3 ลูก ขนผ่านสนามรูปตัว S ไปวางบนสถานีปลายทางที่มีป้าย AprilTag ซึ่งสถานีไหนรับสีไหน**สุ่มทุกรอบ** — หุ่นต้องอ่านเอง
+
+```bash
+ros2 launch rospider_gazebo mini_game.launch.py detector:=color seed:=3
+```
+
+| arg | ค่า | ความหมาย |
+|---|---|---|
+| `detector` | `color` / `yolo` | ใครเป็นคนตรวจจับลูกบาศก์ |
+| `color_config` | `color_detect_arena.yaml` | ค่า HSV เริ่มต้น (ตั้งใจให้**ยังจับไม่ได้** ทีมต้องจูน) — `color_detect_arena_solved.yaml` คือเฉลยของวิทยากร |
+| `model` | `models/yolo/cubes.pt` | โมเดล YOLO — ตัวที่แจกมารู้จักแค่ลูกบาศก์ RGB ทีม YOLO ต้องเทรนใหม่ (ดูด้านล่าง) |
+| `seed` | `0` | สุ่มว่าสถานีไหนได้สีอะไร |
+| `mission` | `basic` | ไฟล์ภารกิจใน `config/missions/` |
+| `auto_start` | `true` | `false` = รอ `ros2 service call /mission/start std_srvs/srv/Trigger` |
+| `tune`, `rviz`, `gui` | | เหมือน launch อื่น — `tune:=true` เปิดหน้าต่างของ detector และ AprilTag; ไฟล์ที่เซฟจากในเกมแยกจากช่วงสาธิตตอนเช้า (`~/.ros/*_game_tuned.json`, `color_detect_arena_tuned.json`) |
+
+### สนาม `worlds/arena.sdf`
+
+โถง 6 × 2 ม. ทางเดินเป็นตัว S: แผงเฉียงหลังจุดเริ่ม → ผนังกั้น A จากด้านเหนือ (ช่อง 0.8 ม. ทางใต้) → ลังในมุมห้องกลาง → ผนังกั้น B จากด้านใต้ (ช่อง 0.8 ม. ทางเหนือ) → จุดสำรวจ (3.0, 0.3) → กล่องด้านใต้ → เสาสองต้น → สถานี 3 จุดเรียงบนผนังท้ายที่ x 5.1 ไฟล์ world เป็นโถงเปล่า **ของในเกมทั้งหมด spawn จาก launch** (แท่น ลูกบาศก์ สถานี) จึงทำแผนที่ได้ด้วย SLAM/V-SLAM ปกติ: `slam.launch.py world:=<path>/arena.sdf` แล้ว `map_saver`
+
+แผนที่ที่ทำไว้ให้อยู่ที่ `maps/arena.yaml` (ผนังและเสาแต่งด้วยมือให้ทึบ) **ทีมทำแผนที่เองได้** ด้วย SLAM หรือ V-SLAM แล้วส่ง `map:=<ไฟล์ .yaml ของทีม>` — launch จะ**วาดแท่นหยิบของลงในแผนที่ให้เอง**ตอนเปิด (แท่นสูง 8 ซม. ต่ำกว่าระนาบสแกน 15 ซม. LiDAR จึงไม่เคยเห็น ถ้าไม่วาด Nav2 จะขับชนแล้วหุ่นหงาย) ไม่ต้องแก้ไฟล์แผนที่ด้วยมือ:
+
+```bash
+ros2 launch rospider_gazebo slam.launch.py world:=$PWD/src/simulations/rospider_gazebo/worlds/arena.sdf   # หรือ vslam.launch.py
+ros2 run nav2_map_server map_saver_cli -f ~/my_arena --ros-args -p use_sim_time:=true
+ros2 launch rospider_gazebo mini_game.launch.py map:=~/my_arena.yaml
+```
+
+**Nav2 ในสนามนี้ต่างจากห้องเดโม** (ทับใน launch ไม่ได้แก้ `nav2_params.yaml`): controller เป็น **Regulated Pure Pursuit** แทน DWB — DWB ในช่อง 0.8 ม. หา trajectory ไม่ได้เลย นั่งหมุน/ถอยจนหมดเวลา (วัด: 600 วิ ได้ 2.3 ม.), `robot_radius` 0.15 (ครึ่งแนวทแยงของกล่อง skid; 0.10 มุมกล่องเกี่ยวปลายผนังแล้วหงาย), `inflation_radius` 0.18, ความเร็ว 0.15 m/s (เดินจริง ~0.10), goal tolerance 0.15 ม., และ **static layer ใน local costmap** เพื่อให้เห็นแท่นที่วาดในแผนที่
+
+### ลูกบาศก์พาสเทลและสถานี
+
+ลูกบาศก์ `pink` / `yellow` / `sky` ความอิ่มสี (S) ราว 60–95 ใน OpenCV HSV ส่วนช่วงสีของลูกบาศก์ RGB ตั้ง S ≥ 120 จึง**มองไม่เห็นเลย** — โจทย์ของทีมสีคือลด S ให้ต่ำพอเห็นลูกบาศก์แต่ไม่ต่ำจนพื้นสีเทาอ่อน (S ≈ 5–11) โผล่ แต่ละสถานีมี**แผ่นสี**ขนาด 0.2 ม. เหนือป้าย สีเดียวกับลูกบาศก์ที่ควรมาวางที่นี่ (ตั้งแผ่นแนวตั้งและเรืองแสงในตัว ไม่ใช่ทาพื้น เพื่อให้กล้องระดับสายตาอ่านได้จากไกลไม่ว่าแสงจะส่องด้านไหน) `stations.station_sdf(id, marker_rgba, tag_size)` สร้าง SDF ให้ตอน launch — ไม่มีไฟล์โมเดลต่อสี **ป้ายในเกมใหญ่ 0.30 ม.** (เดโมใช้ 0.15): จากจุดสำรวจ 2 ม. ป้าย 0.15 กว้างแค่ 30 px อ่านไม่ได้เลย launch จึงส่ง `tag_size` ให้ `apriltag_detect` ด้วย
+
+### ภารกิจ = บล็อกใน YAML
+
+`config/missions/basic.yaml` คือสิ่งที่ทีมแก้: ลำดับบล็อก, waypoint, `standoff`, ชื่อสี
+
+```yaml
+steps:
+  - survey: survey          # ไปจุดสำรวจ หันซ้าย-กลาง-ขวา อ่านป้าย + แผ่นสี → ตาราง "ป้ายไหน = สีอะไร"
+  - goto: pick_table
+  - pick: pink              # คืบไปจุด dock ที่แน่นอน (pick_table + dock), /pick_and_place/pick
+                            # รอจน CARRY แล้วถอยกลับ pick_table
+  - deliver: by_marker      # Nav2 ไปหน้าสถานีที่แผ่นสีตรงกับลูกที่ถือ (ตำแหน่งจากท่าป้ายที่จำไว้)
+                            # แล้ว apriltag_detect เดินเข้า standoff และเรียก ~/place ให้
+  - goto: home
+```
+
+`pick` ที่ยังถือของอยู่ (เพราะ `deliver` ก่อนหน้าล้ม) จะวางลูกนั้นลงพื้นตรงนั้นก่อน (ไม่ได้คะแนน) แล้วทำต่อ ไม่ให้บล็อกที่เหลือล้มทั้งหมด
+
+บล็อกที่มี: `goto`, `survey`, `pick`, `deliver` (`by_marker` หรือเลขป้าย), `place: here`, `say` ไฟล์ที่เขียนผิดจะถูกปฏิเสธตอน launch พร้อมบอกว่าบล็อกไหนผิด `on_fail: skip | retry | stop` กำหนดว่าบล็อกล้มแล้วทำอะไร โหนด `mission` log ทุกบล็อกเป็น `[k/n] block ... ok/FAILED (t s)` และสรุปเวลาทั้งหมดใน `/mission/summary`
+
+**ทำไมต้องสำรวจก่อน:** ตอนถือของกล้องถูกลูกบาศก์บัง (หัวข้อ 8) หุ่นจึงต้องเห็นป้ายทุกใบ*ก่อน*หยิบ สีของแผ่นป้ายโหนด `mission` แยกสีเอง (`mission_plan.marker_boxes`, ช่วง HSV คงที่ในโค้ด เพราะแผ่นเรืองแสงสีคงที่) — **ไม่ได้ใช้ detector ของทีม** ทีม YOLO ที่เทรนแต่ลูกบาศก์จึงไม่ถูกหักคะแนนตอนสำรวจ; detector ของทีมมีผลตอนหยิบเท่านั้น จุด `survey` (3.0, 0) มองเห็นสถานีทั้งสามพร้อมกันในเฟรมเดียว ท่าป้ายถูกจำไว้เป็น TF `tag_<id>_remembered` แล้ว `deliver` คำนวณเป้าหมาย Nav2 จากมัน (ถอยจากป้ายมา `standoff` + 0.3 ม. หันหน้าเข้าป้าย) ทีมจึง**ไม่ต้องปักพิกัดสถานีเอง**
+
+### ทีม YOLO
+
+```bash
+ros2 launch rospider_gazebo mini_game.launch.py auto_start:=false arm_pose:=init      # กล้องก้มมองแท่น
+python3 tools/capture_dataset.py --objects pastel --world arena --dock 0.5 --samples 20 --out ~/datasets/pastel
+python3 tools/train_yolo.py --data ~/datasets/pastel --name pastel        # ~1 นาทีบน GPU
+ros2 launch rospider_gazebo mini_game.launch.py detector:=yolo model:=models/yolo/pastel.pt
+```
+
+`--dock 0.5` ให้เครื่องมือเดินหน้าจากจุด spawn ไปยืนที่เดียวกับที่ mission หยิบ (ห่างลูกบาศก์ 0.235 ม.) ก่อนเก็บภาพ และถอยกลับเมื่อเสร็จ
+
+(20 รูป × 100 epochs พอสำหรับซิม ดูตารางในหัวข้อ 9) `models/yolo/pastel.pt` ที่แจกมาคือเฉลยสำรอง เทรนจาก 60 รูปที่เก็บด้วยคำสั่งข้างบน (mAP50 0.98) เครื่องมือเก็บภาพจะยกแขนไปท่า `look_pose` ของ `pick_and_place` ให้ก่อน เพราะนั่นคือมุมที่ detector จะเห็นตอนหยิบจริง (`--no-look` ถ้าไม่ต้องการ)
+
+> ลูกบาศก์ที่ถูกลูกอื่นบังเกินครึ่ง detector จะให้ค่ามั่นใจต่ำ (วัดได้ 0.42 กับ `conf` 0.5) — ถ้าลูกบาศก์ถูกเฉี่ยวจนซ้อนกัน ลด `conf` ในหน้าต่างจูน YOLO ได้
+
+### ให้คะแนน
+
+```bash
+python3 tools/score.py --seed 3        # seed เดียวกับที่ launch
+```
+
+อ่านตำแหน่งลูกบาศก์จริงจาก Gazebo: อยู่บนสถานีที่สีตรง = 10, สถานีอื่น = 3, ที่อื่น = 0 และเวลาจาก `/mission/summary`
+
+### ตัวเลขที่วัดได้ (เครื่องพัฒนา, `detector:=color` ค่าเฉลย, seed 3)
+
+| ช่วง | เวลา |
+|---|---|
+| สำรวจ (เดิน 3.8 ม. ผ่านตัว S + หันดู 3 มุม) | ~100 วิ |
+| กลับมาแท่นหยิบ | 115–175 วิ |
+| dock + หยิบ + ถอย | 55–80 วิ |
+| ส่งของ (Nav2 ~5 ม. + approach + วาง) | 150–160 วิ |
+| **ทั้งเกม 3 ลูก** | **~21 นาที** (วัด 1246 วิ ได้ 20/30 คะแนน; รอบ YOLO 1220 วิ 20/30) |
+
+ระหว่างพัฒนาเจอสิ่งเหล่านี้ ซึ่งเป็นสาเหตุของค่าที่ตั้งไว้ข้างบน: DWB นั่งนิ่งในช่องแคบ, กล่อง skid เกี่ยวมุมผนังเมื่อ `robot_radius` 0.10, Nav2 ขับชนแท่นที่ LiDAR มองไม่เห็น, ป้าย 0.15 ม. อ่านไม่ได้จาก 2 ม., เสาบังป้ายจากจุดสำรวจ, แผ่นสีที่ไม่เรืองแสงมี S แค่ 32 ในเงา, แท่นตื้น 8 ซม. ทำลูกบาศก์ข้าง ๆ ตกเมื่อกริปเปอร์เฉี่ยว, และ Nav2 มาถึง `pick_table` คลาด 5–13 ซม. จนแขนเอื้อมไม่ถึง (จึงต้อง dock ไปจุดแน่นอนด้วย TF ก่อนหยิบ)
+
+
 ## รันหลายตัวพร้อมกัน
 
 ตั้งค่าคนละชุดในแต่ละ terminal ไม่ให้ชนกัน:

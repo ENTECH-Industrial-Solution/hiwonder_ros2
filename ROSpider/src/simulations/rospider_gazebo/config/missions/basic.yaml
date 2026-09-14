@@ -1,0 +1,43 @@
+# The mini game's default mission. Blocks run top to bottom; each one is a
+# thing the robot already knows how to do (see scripts/mission.py). Teams
+# edit THIS file: reorder blocks, change the colours, move the waypoints,
+# tune the standoff. A mistake is reported at launch, naming the block.
+mission:
+  # x, y, yaw (rad) in the map frame. The robot spawns at the origin facing
+  # +x with the pick pedestal 0.735 m in front of it: pick_table is the
+  # spawn pose and the dock below covers the distance. survey is just past
+  # the S-bend, on the north side away from the box, where every station's
+  # tag and colour marker is in view at once.
+  waypoints:
+    home: [0.0, 0.0, 0.0]
+    pick_table: [0.0, 0.0, 0.0]
+    survey: [3.0, 0.3, 0.0]
+
+  # Metres from the robot's base to the tag when apriltag_detect fires
+  # ~/place. The station pedestal is 0.12 m in front of the tag and the arm
+  # reaches about 0.16 m ahead of the base.
+  standoff: 0.30
+
+  # pick creeps this far along pick_table's heading to an exact pose (the
+  # cubes are then 0.235 m ahead of the base, the arm's reach) and backs
+  # out to pick_table afterwards. Nav2 never has to plan from beside the
+  # pedestal, which it cannot see with the LiDAR and only knows from the map.
+  dock: 0.5
+
+  # What to do when a block fails: skip (go on), retry (once), stop.
+  on_fail: skip
+
+  steps:
+    - say: "mini game: survey, then three deliveries"
+    - survey: survey            # read tags + marker colours from here
+    - goto: pick_table
+    - pick: pink
+    - deliver: by_marker        # the station whose marker is pink
+    - goto: pick_table
+    - pick: yellow
+    - deliver: by_marker
+    - goto: pick_table
+    - pick: sky
+    - deliver: by_marker
+    - goto: home
+    - say: done

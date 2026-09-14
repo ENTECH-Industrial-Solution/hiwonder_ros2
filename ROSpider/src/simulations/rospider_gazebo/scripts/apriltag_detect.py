@@ -47,6 +47,8 @@ from geometry_msgs.msg import TransformStamped, Twist
 from interfaces.msg import ApriltagInfo, ApriltagsInfo
 from interfaces.srv import SetString
 from rcl_interfaces.msg import SetParametersResult
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
 from rclpy.node import Node
 from rospider_gazebo import labelling, tag_settings, tags, tkview
 from rospider_gazebo.ros_image import to_image_msg
@@ -124,6 +126,18 @@ class AprilTagNode(Node):
         self.place_client = self.create_client(SetString,
                                                '/pick_and_place/place')
         self.broadcaster = tf2_ros.TransformBroadcaster(self)
+        # Remembered tags go out as static TF tag_<id>_remembered under
+        # memory_frame, re-sent on every change, so another node (the mini
+        # game's mission) can look a station up long after the camera
+        # stopped seeing it. Static rather than periodic: the pose does not
+        # move until the tag is seen again.
+        self.memory_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+        latched = QoSProfile(depth=1,
+                             durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.status_pub = self.create_publisher(String, '~/status', latched)
+        self.place_result_pub = self.create_publisher(String, '~/place_result',
+                                                      latched)
+        self._published_status = None
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
@@ -377,6 +391,10 @@ class AprilTagNode(Node):
                                              else ' (no TF)')
             if self.behavior.target in virtual_ids:
                 self.status += ' [remembered]'
+            changed = self.status != self._published_status
+            self._published_status = self.status
+        if changed:
+            self.status_pub.publish(String(data=self.status))
         if decision.twist is not None:
             twist = Twist()
             twist.linear.x, twist.angular.z = (float(v)
@@ -419,6 +437,29 @@ class AprilTagNode(Node):
             updates[tag_id] = (rot_mc @ rot_ct, rot_mc @ tvec.ravel() + t_mc)
         with self._lock:
             self.memory.update(updates)
+        self._broadcast_memory(updates)
+
+    def _broadcast_memory(self, updates):
+        """Static TF tag_<id>_remembered <- memory_frame for the tags that
+        just changed. Quaternion via the same Rodrigues path as the live
+        tag_<id> frames."""
+        transforms = []
+        for tag_id, (rot, t) in updates.items():
+            rvec, _ = cv2.Rodrigues(rot)
+            x, y, z, w = tags.quaternion_from_rvec(rvec)
+            transform = TransformStamped()
+            transform.header.stamp = self.get_clock().now().to_msg()
+            transform.header.frame_id = self.memory_frame
+            transform.child_frame_id = f'tag_{tag_id}_remembered'
+            transform.transform.translation.x = float(t[0])
+            transform.transform.translation.y = float(t[1])
+            transform.transform.translation.z = float(t[2])
+            transform.transform.rotation.x = x
+            transform.transform.rotation.y = y
+            transform.transform.rotation.z = z
+            transform.transform.rotation.w = w
+            transforms.append(transform)
+        self.memory_broadcaster.sendTransform(transforms)
 
     def _recall(self, poses, header):
         """Virtual sightings: remembered approach/place tags not seen now.
@@ -482,6 +523,7 @@ class AprilTagNode(Node):
         self.get_logger().info(message)
         with self._lock:
             self.place_response = message
+        self.place_result_pub.publish(String(data=message))
 
     # ---------------------------------------------------------------- tuner
 
