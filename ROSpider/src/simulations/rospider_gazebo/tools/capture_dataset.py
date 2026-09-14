@@ -107,17 +107,31 @@ def _fields(text):
     return {k: float(v) for k, v in re.findall(r'([xyzw]):\s*(\S+)', text)}
 
 
-def read_poses(world, names):
+def read_poses(world, names, attempts=3):
     """{name: (position, quaternion)} for the models that are currently moving.
 
     dynamic_pose/info only carries bodies physics is simulating, which is
     exactly the set whose commanded pose cannot be trusted.
+
+    Retried for the same reason set_pose is: each call spawns a gz CLI
+    process, a capture run spawns thousands of them, and under that
+    contention one occasionally exits non-zero with nothing on stderr. It is
+    transient -- the same call made on its own succeeds every time -- and
+    killing a 400-sample run over it is worse than trying again.
     """
-    result = subprocess.run(
-        ['gz', 'topic', '-e', '-t', f'/world/{world}/dynamic_pose/info', '-n', '1'],
-        capture_output=True, text=True, timeout=15)
-    if result.returncode != 0:
-        raise RuntimeError(f'could not read dynamic_pose/info: {result.stderr}')
+    for attempt in range(attempts):
+        result = subprocess.run(
+            ['gz', 'topic', '-e', '-t', f'/world/{world}/dynamic_pose/info',
+             '-n', '1'],
+            capture_output=True, text=True, timeout=20)
+        if result.returncode == 0 and result.stdout.strip():
+            break
+        if attempt + 1 < attempts:
+            time.sleep(0.5)
+    else:
+        raise RuntimeError(
+            f'could not read dynamic_pose/info after {attempts} attempts: '
+            f'{result.stderr}')
     poses = {}
     for match in _POSE_BLOCK.finditer(result.stdout):
         if match.group('name') not in names:
@@ -147,7 +161,7 @@ def wait_until_settled(node, world, names, tolerance=0.001, timeout=8.0):
     deadline = time.monotonic() + timeout
     previous = read_poses(world, names)
     while time.monotonic() < deadline:
-        spin_until = time.monotonic() + 0.25
+        spin_until = time.monotonic() + 0.5
         while time.monotonic() < spin_until:
             rclpy.spin_once(node, timeout_sec=0.05)
         current = read_poses(world, names)
