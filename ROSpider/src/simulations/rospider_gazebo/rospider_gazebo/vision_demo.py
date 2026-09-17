@@ -6,6 +6,11 @@ cv2.imshow()es it and quits on q or Esc. VisionDemo is that skeleton, so each
 ported script is only the part that differs -- what it draws and what it does
 with the robot.
 
+What a window shows is exactly what the upstream script draws: the same
+primitives, colours (translated to BGR), fonts and window titles. States
+the simulation has and the robot does not -- waiting for a topic, a
+calibration pass, a lost target -- are logged, never drawn.
+
 Three things differ from upstream and are the same in every ported demo:
 
   * The display loop owns the main thread and rclpy.spin() runs on a worker,
@@ -83,15 +88,6 @@ class FPS:
         cv2.putText(image, text, (10, 20), cv2.FONT_HERSHEY_PLAIN, 1.0,
                     (240, 240, 240), 1, cv2.LINE_AA)
         return image
-
-
-def banner(image, text, position=(10, 100), scale=1.2, color=(255, 255, 0)):
-    """Hiwonder's two-pass caption: a black outline under a coloured word."""
-    cv2.putText(image, text, position, cv2.FONT_HERSHEY_SIMPLEX, scale,
-                (0, 0, 0), 5, cv2.LINE_AA)
-    cv2.putText(image, text, position, cv2.FONT_HERSHEY_SIMPLEX, scale,
-                color, 2, cv2.LINE_AA)
-    return image
 
 
 def depth_color_map(depth_mm, ceiling=None):
@@ -203,6 +199,9 @@ class VisionDemo(Node):
 
     #: Window title; the node name is used when this is left as None.
     window = None
+    #: Draw upstream's FPS caption. Only the demos whose original calls
+    #: fps.show_fps() turn this on.
+    show_fps = False
 
     def __init__(self, name, *, image_topic=RGB_TOPIC, depth=False,
                  depth_frames=False, camera_info=None, flip=False,
@@ -334,7 +333,8 @@ class VisionDemo(Node):
             if result is None:
                 continue
             self.fps.update()
-            self.fps.show_fps(result)
+            if self.show_fps:
+                self.fps.show_fps(result)
             self.publish_result(result)
             if not self.show:
                 continue
