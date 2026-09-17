@@ -19,7 +19,7 @@ import time
 import cv2
 import numpy as np
 from rospider_gazebo import gestures, shape_detect, vision_demo
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
 try:
     import mediapipe as mp
@@ -44,6 +44,8 @@ def draw_points(image, points, thickness=4, color=(255, 0, 0)):
 
 
 class FingerTrajectoryNode(VisionDemo):
+
+    window = 'image'
 
     def __init__(self):
         super().__init__('finger_trajectory', flip=True)
@@ -81,7 +83,7 @@ class FingerTrajectoryNode(VisionDemo):
             if self.tracking and time.monotonic() - self.last_seen > LOST_TIMEOUT:
                 self.tracking = False
                 self.points = []
-            return self._caption(frame)
+            return frame
 
         self.last_seen = time.monotonic()
         for hand in results.multi_hand_landmarks:
@@ -109,7 +111,7 @@ class FingerTrajectoryNode(VisionDemo):
 
         if len(self.points) > 1:
             draw_points(frame, self.points)
-        return self._caption(frame)
+        return frame
 
     def _finish(self):
         """Name the drawn shape and show it in its own window."""
@@ -118,14 +120,6 @@ class FingerTrajectoryNode(VisionDemo):
         self.get_logger().info(f'drawn shape: {name or "unrecognised"}')
         if self.show:
             cv2.imshow(TRACK_WINDOW, view)
-
-    def _caption(self, frame):
-        if self.tracking:
-            return banner(frame, f'DRAWING ({len(self.points)})', scale=0.9)
-        if self.shape:
-            return banner(frame, self.shape.upper())
-        return banner(frame, 'SHOW ONE FINGER', scale=0.8,
-                      color=(200, 200, 200))
 
 
 def main():

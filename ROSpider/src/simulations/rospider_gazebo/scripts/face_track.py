@@ -23,7 +23,7 @@ The simulated world has nobody in it, so use the PC's camera:
 import cv2
 from rospider_gazebo import gestures, vision_demo
 from rospider_gazebo.pid import PID, set_range
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
 try:
     import mediapipe as mp
@@ -62,6 +62,9 @@ def face_boxes(results, width, height):
 
 class FaceTrackNode(VisionDemo):
 
+    window = 'result'
+    show_fps = True
+
     def __init__(self):
         super().__init__('face_track', servos=True)
         self.detector = mp.solutions.face_detection.FaceDetection(
@@ -89,7 +92,7 @@ class FaceTrackNode(VisionDemo):
             else:
                 self.pid_pan.clear()
                 self.pid_tilt.clear()
-            return banner(frame, 'NO FACE', color=(200, 200, 200))
+            return frame
 
         self.locked = min(self.locked + 1, LOCK_CEILING)
         for box, points in zip(boxes, keypoints):
@@ -103,8 +106,7 @@ class FaceTrackNode(VisionDemo):
                      key=lambda c: gestures.distance(c, (width / 2,
                                                          height / 2)))
         if self.locked < LOCK_FRAMES:
-            return banner(frame, f'LOCKING {self.locked}/{LOCK_FRAMES}',
-                          scale=0.8, color=(0, 200, 255))
+            return frame
 
         # Both PIDs see setpoint - measurement, so a face left of centre
         # gives a positive pan step (servo 19 up = turn left) and a face
@@ -119,9 +121,7 @@ class FaceTrackNode(VisionDemo):
 
         self.servos.set_servo_position(0.05, ((19, int(self.pan)),
                                               (22, int(self.tilt))))
-        cv2.circle(frame, (int(centre[0]), int(centre[1])), 5, (0, 255, 255), -1)
-        return banner(frame, f'PAN {int(self.pan)}  TILT {int(self.tilt)}',
-                      scale=0.8)
+        return frame
 
     def on_stop(self):
         self.servos.set_servo_position(1.0, LEVEL_POSE)

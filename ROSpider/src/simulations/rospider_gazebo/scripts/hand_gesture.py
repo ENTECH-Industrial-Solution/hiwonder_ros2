@@ -31,7 +31,7 @@ import time
 
 import cv2
 from rospider_gazebo import gestures, vision_demo
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
 try:
     import mediapipe as mp
@@ -51,6 +51,8 @@ HOLD_FRAMES = 20
 
 
 class HandGestureNode(VisionDemo):
+
+    window = 'result_image'
 
     def __init__(self):
         super().__init__('hand_gesture', flip=True, cmd_vel=True)
@@ -95,11 +97,11 @@ class HandGestureNode(VisionDemo):
         results = self.detector.process(cv2.cvtColor(frame,
                                                      cv2.COLOR_BGR2RGB))
         if self.busy:
-            return banner(frame, 'RUNNING', color=(0, 200, 255))
+            return frame
         if not results.multi_hand_landmarks:
             self.count = 0
             self.last_gesture = 'none'
-            return banner(frame, 'NO HAND', color=(200, 200, 200))
+            return frame
 
         height, width = frame.shape[:2]
         gesture = 'none'
@@ -119,12 +121,10 @@ class HandGestureNode(VisionDemo):
             self.count = 0
             self.gesture = gesture
 
-        banner(frame, gesture.upper())
-        if gesture in MOVES:
-            cv2.rectangle(frame, (10, 120),
-                          (10 + int(300 * min(self.count, HOLD_FRAMES)
-                                    / HOLD_FRAMES), 132),
-                          (255, 255, 0), -1)
+        cv2.putText(frame, gesture.upper(), (10, 100),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 5)
+        cv2.putText(frame, gesture.upper(), (10, 100),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 0), 2)
         return frame
 
     def on_stop(self):

@@ -31,12 +31,15 @@ import time
 import cv2
 from rospider_gazebo import gestures, vision_demo
 from rospider_gazebo.pid import set_range
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
 try:
     import mediapipe as mp
 except ImportError as exc:                                  # pragma: no cover
     raise SystemExit('this demo needs mediapipe: pip install mediapipe') from exc
+
+#: Upstream shows the frame resized to this (pose_control.py display_size).
+DISPLAY_SIZE = (int(640 * 8 / 4), int(400 * 8 / 4))
 
 PULSE_PER_DEGREE = 1000 / 240
 
@@ -74,6 +77,8 @@ class State(enum.Enum):
 
 class PoseControlNode(VisionDemo):
 
+    window = 'image'
+
     def __init__(self):
         super().__init__('pose_control', flip=True, servos=True)
         self.drawing = mp.solutions.drawing_utils
@@ -103,12 +108,20 @@ class PoseControlNode(VisionDemo):
     def process(self, frame):
         results = self.pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         if not results.pose_landmarks:
-            return self._caption(frame)
+            return cv2.resize(frame, DISPLAY_SIZE)
         self.drawing.draw_landmarks(frame, results.pose_landmarks,
                                     mp.solutions.pose.POSE_CONNECTIONS)
         height, width = frame.shape[:2]
         landmarks = gestures.landmarks_to_pixels(
             (width, height), results.pose_landmarks.landmark)
+        # Upstream's mp_pose_landmarks(): a blue dot on every landmark, then
+        # the two shoulders and the right elbow in their own colours.
+        for cx, cy in landmarks:
+            cv2.circle(frame, (int(cx), int(cy)), 5, (255, 0, 0), cv2.FILLED)
+        for index, color in ((11, (255, 255, 0)), (12, (0, 255, 255)),
+                             (14, (0, 255, 0))):
+            cv2.circle(frame, tuple(int(v) for v in landmarks[index]), 5,
+                       color, cv2.FILLED)
 
         if self.state is State.NULL:
             if (time.monotonic() - self.timestamp > REARM_DELAY
@@ -128,7 +141,7 @@ class PoseControlNode(VisionDemo):
         else:
             self._mirror(landmarks)
 
-        return self._caption(frame)
+        return cv2.resize(frame, DISPLAY_SIZE)
 
     def _activate(self, landmarks):
         """Record the arm lengths this person's yaw mapping is scaled by."""
@@ -174,12 +187,6 @@ class PoseControlNode(VisionDemo):
             0.1, tuple((SERVO_IDS[name],
                         int(set_range(pulse, *LIMITS[name])))
                        for name, pulse in pulses.items()))
-
-    def _caption(self, frame):
-        color = {State.NULL: (200, 200, 200),
-                 State.ARMED: (0, 200, 255),
-                 State.IMITATION: (0, 255, 0)}[self.state]
-        return banner(frame, self.state.value, scale=0.9, color=color)
 
     def on_stop(self):
         self._reset_legs()

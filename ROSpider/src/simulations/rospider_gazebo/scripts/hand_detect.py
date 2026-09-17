@@ -16,8 +16,8 @@ The simulated world has nobody in it, so point this at the PC's own camera:
 """
 
 import cv2
-from rospider_gazebo import gestures, vision_demo
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo import vision_demo
+from rospider_gazebo.vision_demo import VisionDemo
 
 try:
     import mediapipe as mp
@@ -26,6 +26,8 @@ except ImportError as exc:                                  # pragma: no cover
 
 
 class HandDetectNode(VisionDemo):
+
+    window = 'hand_detect'
 
     def __init__(self):
         super().__init__('hand_detect', flip=True)
@@ -39,21 +41,26 @@ class HandDetectNode(VisionDemo):
                                                      0.4)))
 
     def process(self, frame):
+        """Upstream's overlay (mediapipe_visual.draw_hand_landmarks_on_image):
+        the landmarks and, above each hand, which hand it is."""
         # MediaPipe wants RGB; the frame off the camera is BGR.
         results = self.detector.process(cv2.cvtColor(frame,
                                                      cv2.COLOR_BGR2RGB))
         if not results.multi_hand_landmarks:
-            return banner(frame, 'NO HAND', color=(200, 200, 200))
+            return frame
 
         height, width = frame.shape[:2]
-        names = []
-        for hand in results.multi_hand_landmarks:
+        for hand, handed in zip(results.multi_hand_landmarks,
+                                results.multi_handedness):
             self.drawing.draw_landmarks(frame, hand,
                                         mp.solutions.hands.HAND_CONNECTIONS)
-            landmarks = gestures.landmarks_to_pixels((width, height),
-                                                     hand.landmark)
-            names.append(gestures.hand_gesture(landmarks))
-        return banner(frame, '  '.join(n.upper() for n in names))
+            xs = [lm.x * width for lm in hand.landmark]
+            ys = [lm.y * height for lm in hand.landmark]
+            cv2.putText(frame, handed.classification[0].label,
+                        (int(min(xs)) + 10, int(min(ys)) - 10),
+                        cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 0), 1,
+                        cv2.LINE_AA)
+        return frame
 
 
 def main():
