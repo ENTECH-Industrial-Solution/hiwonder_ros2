@@ -16,6 +16,7 @@
 | นำทาง (Nav2) | `rospider_gazebo navigation.launch.py` | แผนที่ 2D ห้อง sim ที่ทำไว้แล้ว หรือแผนที่ของเราเอง |
 | แขนกล MoveIt ใน Gazebo | `rospider_gazebo moveit.launch.py` | สั่งแขน/gripper ผ่าน MoveIt |
 | หยิบและวางลูกบาศก์สีอัตโนมัติ | `rospider_gazebo pick_place.launch.py` | ตรวจจับสีด้วย OpenCV + IK ปิดรูปเอง ไม่ใช้ MoveIt |
+| หน้าต่างเดโมของ Hiwonder (สี, AprilTag, AR, KCF, depth, MediaPipe) | `rospider_gazebo vision_demo.launch.py demo:=...` | ย้ายมาจาก `src/example/` 15 ตัว — ดูข้อ 11 |
 
 **ข้อจำกัดสำคัญ:** โค้ดเดินจริงของ Hiwonder (`driver/kinematics/kinematics.so`) เป็น binary ของ ARM (Jetson) เท่านั้น ไม่มี source จึงรันบน PC ไม่ได้ ใน sim จึงใช้ท่าเดินที่เขียนขึ้นเอง (`scripts/sim_gait.py`) — ก้าวขาแบบ tripod (ยกทีละ 3 ขาสลับกัน) ตามความเร็วที่สั่ง เท้าที่แตะพื้นอยู่นิ่งกับพื้น แต่ตัวหุ่นถูก Gazebo เลื่อนไปตาม `cmd_vel` โดยตรง (ขาไม่ได้ออกแรงดันพื้นจริง) — เหมาะกับทดสอบ SLAM / Nav2 / vision / แขนกล แต่ไม่เหมาะกับทดสอบการเดินบนพื้นขรุขระ การทรงตัว หรือท่าเดินของหุ่นจริง
 
@@ -759,6 +760,104 @@ python3 tools/score.py --seed 3        # seed เดียวกับที่ 
 
 ระหว่างพัฒนาเจอสิ่งเหล่านี้ ซึ่งเป็นสาเหตุของค่าที่ตั้งไว้ข้างบน: DWB นั่งนิ่งในช่องแคบ, กล่อง skid เกี่ยวมุมผนังเมื่อ `robot_radius` 0.10, Nav2 ขับชนแท่นที่ LiDAR มองไม่เห็น, ป้าย 0.15 ม. อ่านไม่ได้จาก 2 ม., เสาบังป้ายจากจุดสำรวจ, แผ่นสีที่ไม่เรืองแสงมี S แค่ 32 ในเงา, แท่นตื้น 8 ซม. ทำลูกบาศก์ข้าง ๆ ตกเมื่อกริปเปอร์เฉี่ยว, และ Nav2 มาถึง `pick_table` คลาด 5–13 ซม. จนแขนเอื้อมไม่ถึง (จึงต้อง dock ไปจุดแน่นอนด้วย TF ก่อนหยิบ)
 
+## 11. หน้าต่างเดโมของหุ่นจริง (ported UI windows)
+
+ใน `src/example/` ของ Hiwonder มีเดโมที่เปิด**หน้าต่าง OpenCV** อยู่หลายตัว (ตรวจจับสี, AprilTag, AR, KCF, กล้อง depth, MediaPipe) แต่รันบน PC ไม่ได้ เพราะเรียก `controller` / `kinematics.so` / `arm_kinematics` ของ ARM, เรียก service ของบอร์ด STM32 และอ่านไฟล์ที่มีแต่ในอิมเมจของหุ่น (เช่น `/home/ubuntu/software/lab_tool/lab_config.yaml`)
+
+รอบนี้ย้ายมาเขียนใหม่ใน `src/simulations/rospider_gazebo/scripts/` ให้ **หน้าตาและพฤติกรรมเหมือนของ Hiwonder** แต่ต่อกับ topic ของ sim โดยตรง ค่าคงที่ เกณฑ์ตัดสิน และท่าเริ่มต้น (pulse ของ servo 19–24) ยกมาจากต้นฉบับทั้งหมด ส่วนไหนที่ sim ไม่มี (ลำโพง, action group, IK ของ ARM) จะเขียนบอกไว้ใน docstring หัวไฟล์ทุกไฟล์
+
+### รันยังไง
+
+เปิด Gazebo ไว้ก่อน แล้วค่อยเปิดหน้าต่างเดโม (launch นี้**ไม่**เปิด Gazebo ให้ จะได้ขับหุ่นไปมา หรือเปิด `pick_place.launch.py` ค้างไว้ แล้วสลับเดโมได้)
+
+```bash
+# terminal 1
+ros2 launch rospider_gazebo gazebo.launch.py
+
+# terminal 2
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
+```
+
+กด `q` หรือ `Esc` ในหน้าต่างเพื่อปิด ทุกเดโมยัง publish ภาพเดียวกันที่ `/<ชื่อเดโม>/image_result` ด้วย (ดูผ่าน `rqt_image_view` หรือรันแบบไม่มีจอด้วย `show:=false` ก็ได้)
+
+### มีเดโมอะไรบ้าง
+
+| `demo:=` | ย้ายมาจาก | ทำอะไร | ต้องมีอะไรด้วย |
+|---|---|---|---|
+| `color_position` | `opencv_example/color_position.py` | บอกพิกัดจุดกึ่งกลางของก้อนสีบนภาพ | ตัวตรวจจับ (launch เปิด `color_detect` ให้เอง) |
+| `color_recognition` | `opencv_example/color_recognition_node.py` | เห็นสีไหนค้างนาน 30 เฟรม แล้วขยับแขนท่าประจำสีนั้น | เหมือนบน |
+| `apriltag_position` | `opencv_example/apriltag_position.py` | อ่าน id / x / y / ความกว้าง / ระยะ ของป้ายที่เห็น | `apriltag_detect` (launch เปิดให้เอง) + มีป้ายในโลก |
+| `apriltag_track` | `opencv_example/apriltag_track.py` | เดินเข้าไปหาป้ายที่กำหนดแล้วหยุดที่ระยะ `stop_distance` | เหมือนบน |
+| `ar_view` | `opencv_example/ar.py` | วาดลูกบาศก์ (หรือโมเดล `.obj`) ทับป้าย AprilTag | มีป้ายในโลก |
+| `kcf_track` | `opencv_example/kcf.py` | กด `s` ลากกรอบเลือกเป้าหมาย แล้วหุ่นหันตาม | — |
+| `prevent_falling` | `rgbd_example/prevent_falling_node.py` | เดินหน้า เจอขอบโต๊ะ/ขั้นบันไดแล้วเลี้ยวหนี | กล้อง depth |
+| `cross_bridge` | `rgbd_example/cross_bridge_node.py` | คลานข้ามสะพานแคบ เบี่ยงกลับเข้ากลางเอง | ต้องสร้างสะพานในโลกเอง |
+| `object_volume` | `rgbd_example/object_volume_measurement.py` | แยกทรงกลม/ทรงกระบอก/กล่อง จาก depth แล้วคำนวณปริมาตร | กล้อง depth + มีของวางอยู่ |
+| `object_classification` | `rgbd_example/object_classification.py` | แยกรูปทรง + สี + ตำแหน่งในกรอบกล้อง | เหมือนบน |
+| `hand_detect` | `mediapipe_example/hand_detect.py` | วาดโครงกระดูกมือ + บอกชื่อท่ามือ | `source:=webcam` |
+| `hand_gesture` | `mediapipe_example/hand_gesture.py` | ทำท่ามือค้างไว้ แล้วหุ่นทำท่าประจำท่ามือนั้น | `source:=webcam` |
+| `finger_trajectory` | `mediapipe_example/finger_trajectory.py` | วาดรูปกลางอากาศด้วยนิ้วชี้ แล้วให้ทายว่าเป็นรูปอะไร | `source:=webcam` |
+| `face_track` | `mediapipe_example/face_track.py` | กล้องบนแขนหันตามหน้าคน | `source:=webcam` |
+| `pose_control` | `mediapipe_example/pose_control.py` | ขาหน้าสองข้างขยับตามแขนคน | `source:=webcam` |
+
+### เดโม MediaPipe ต้องใช้กล้องของ PC
+
+ในโลก sim ไม่มีคน เดโมกลุ่ม MediaPipe จึงต้องดูกล้องจริง — ใส่ `source:=webcam` แล้ว launch จะเปิด `webcam_publisher.py` ส่งภาพจากกล้อง PC ขึ้น `/webcam/image_raw` ให้เอง (คนนั่งหน้าโน้ตบุ๊ก หุ่นขยับใน Gazebo)
+
+```bash
+# ลง mediapipe ก่อน (ไม่มีใน rosdep) — ไฟล์นี้ตรึง numpy<2 ไว้ด้วย เพราะ cv_bridge ของ Jazzy ต้องใช้ numpy 1.x
+pip install --user --break-system-packages -r src/simulations/rospider_gazebo/requirements-mediapipe.txt
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=hand_gesture source:=webcam
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=hand_gesture source:=webcam device:=2   # เลือกกล้อง
+```
+
+ถ้าไม่ได้เปิด Gazebo เลย (ดูแค่หน้าต่างเฉยๆ) ให้ใส่ `use_sim_time:=false` ด้วย ไม่งั้น node จะรอ `/clock` ที่ไม่มีวันมา
+
+### ปรับค่า
+
+ค่าเริ่มต้นทั้งหมดอยู่ใน `config/vision_demos.yaml` (แยกเป็นบล็อกต่อเดโม) ค่าที่ใช้บ่อยสั่งทับจาก command line ได้เลย:
+
+```bash
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=apriltag_track target_tag:=2 stop_distance:=0.5
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position detector:=yolo
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=kcf_track tracker:=csrt
+```
+
+ค่าที่เป็น list (`colors`, `roi`, `shapes`) แก้ได้เฉพาะในไฟล์ yaml เพราะ argument ของ launch เป็นข้อความล้วน
+
+### ตั้งระยะพื้นก่อนใช้เดโม depth
+
+`prevent_falling`, `cross_bridge`, `object_volume`, `object_classification` ตัดสินจาก "พื้นอยู่ไกลเท่าไร" ซึ่งขึ้นกับท่าแขนตอนเปิดโลก วัดครั้งเดียวด้วย `debug:=true` — มันจะเฉลี่ย 50 เฟรมแล้ว log ค่าออกมา จากนั้นเอาค่านั้นใส่กลับ:
+
+```bash
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=prevent_falling debug:=true
+# [prevent_falling]: floor is 0.372 m away -- pass plane_distance:=0.372 next time to skip this
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=prevent_falling plane_distance:=0.372
+```
+
+> หน่วยไม่เหมือนกันระหว่างเดโม: `prevent_falling` / `cross_bridge` ใช้ **เมตร** ส่วน `object_volume` / `object_classification` ใช้ **มิลลิเมตร** — เป็นแบบนี้ในต้นฉบับของ Hiwonder อยู่แล้ว เลยไม่แก้
+
+### เรื่องที่ต่างจากหุ่นจริง (ตั้งใจให้ต่าง)
+
+- **คำสั่ง servo** — สคริปต์ยังเขียนด้วย pulse แบบ Hiwonder (`(19, 500), (20, 750), ...`) แล้ว `rospider_gazebo/servo_map.py` แปลงเป็นเรเดียนส่งเข้า `arm_controller` / `gripper_controller` / `leg_controller` ตารางแปลงลอกมาจาก `driver/servo_controller/config/servo_controller.yaml` ตรงๆ (servo หมุน 240° ต่อ 1000 pulse, `init` คือ 0 เรเดียน, ข้อที่ `min` > `max` คือหมุนกลับทาง)
+- **ไม่มีเสียง** — เดโมที่หุ่นจริงร้องบี๊บ (`color_recognition`, `hand_gesture`, `pose_control`) ใช้ตัวหนังสือบนหน้าต่างแทน
+- **ไม่มี action group** — `hand_gesture` ของจริงเล่นท่าที่อัดไว้ใน `/home/ubuntu/software/actionset_editor/ActionGroups` ใน sim จับคู่ท่ามือกับการเคลื่อนที่สั้นๆ ผ่าน `/controller/cmd_vel` แทน (ดูตาราง `MOVES` ในไฟล์)
+- **`face_track` ไม่ใช้ IK** — ของจริงคำนวณความสูงข้อมือผ่าน service `arm_kinematics` (ไลบรารี ARM) ใน sim กล้องอยู่บน `link4` อยู่แล้ว เลยสั่ง servo 19 (หัน) กับ servo 22 (ก้ม/เงย) ตรงๆ ผลลัพธ์ที่ตาเห็นเหมือนกัน
+- **`pose_control` ไปแย่ง `leg_controller` กับ `sim_gait`** — อย่าสั่งหุ่นเดินระหว่างที่กำลังเลียนแบบท่า ไม่งั้นสองตัวจะแย่งกันสั่งขาหน้า
+- **`apriltag_track` กับ behaviours ของ `apriltag_detect` ขับหุ่นทั้งคู่** — เปิดทีละอย่าง
+- **`kcf_track` อาจไม่ได้ใช้ KCF จริง** — OpenCV 5 (ที่ pip ลงให้) ไม่มี KCF และ CSRT แล้ว โค้ดจะไล่หา KCF → CSRT → MIL แล้วบอกบนหน้าต่างว่าได้ตัวไหน
+- **`ar_view` ไม่มีโมเดล `.obj` ติดมา** — ไฟล์ของ Hiwonder อยู่ใน `src/example/example/opencv_example/include/3d_model/` ซึ่ง package `example` ไม่ได้ install ให้ ถ้าจะใช้ต้องชี้ path เอง พร้อมใส่ scale ที่ต้นฉบับใช้ (bicycle 50, fox 4, chair 400, cow 0.4, wolf 0.6):
+
+```bash
+ros2 launch rospider_gazebo vision_demo.launch.py demo:=ar_view \
+  model_path:=$PWD/src/example/example/opencv_example/include/3d_model/fox.obj model_scale:=4
+```
+
+### ที่ไม่ได้ย้ายมา
+
+- `rgbd_example/track_and_grab.py` — เป็นเดโม "เห็นแล้วหยิบ" ซึ่ง sim มี `pick_place.launch.py` ทำหน้าที่นี้อยู่แล้ว (และทำได้ครบกว่า เพราะมี IK ปิดรูปของตัวเอง)
+- ส่วนที่ `object_classification` ของจริงหยิบของไปจำแนกใส่ถาด — เหลือแค่ตรวจจับและรายงาน เหตุผลเดียวกัน
+- `opencv_example/color_detect_node.py`, `apriltag_recognition.py` — ตัวตรวจจับ ไม่ใช่หน้าต่างเดโม; sim มี `color_detect.py` / `apriltag_detect.py` ของตัวเองที่ publish topic และ message เดียวกันอยู่แล้ว (ดูข้อ 7 และข้อ 8)
 
 ## รันหลายตัวพร้อมกัน
 
@@ -775,5 +874,6 @@ export ROS_DOMAIN_ID=11 GZ_PARTITION=sim11
 - **RViz ขึ้น `Message Filter dropping message ... earlier than all the data in the transform cache` หนึ่งครั้งตอนเริ่ม และ `GLSL link result` / `active samplers ...`** — ไม่มีผล ข้อความแรกเกิดเพราะ scan แรกมาถึงก่อน TF (หุ่นจริงก็เป็น) ข้อความ GLSL เป็นคำเตือนของไดรเวอร์กราฟิก
 - **`slam.launch.py` / `navigation.launch.py` ของ package `slam` / `navigation` (Hiwonder) ใช้กับ sim ไม่ได้** แม้มี `sim:=true` เพราะยังเปิด driver ของหุ่นจริง และเขียนไว้สำหรับ ROS 2 Humble — ใช้ของ `rospider_gazebo` แทน
 - **node ที่ต้องใช้ `controller` / `kinematics` ของ Hiwonder** (เช่น self balancing, body control, perform actions) รันบน PC ไม่ได้ เพราะต้องใช้ `kinematics.so` ของ ARM
+- **เดโม MediaPipe ขึ้น `No module named mediapipe`** — `rosdep` ไม่ได้ลงให้ ต้องลงเองจาก `requirements-mediapipe.txt` (ดูข้อ 11)
 - ขาและแขนใน sim ไม่มี collision (ตัดออกเพื่อให้ physics เร็ว) — ขาทะลุสิ่งกีดขวางได้ ตัวหุ่นชนกำแพงผ่านกล่อง collision ใต้ลำตัว
 

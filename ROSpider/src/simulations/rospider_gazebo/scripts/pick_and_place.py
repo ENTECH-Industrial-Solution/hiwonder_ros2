@@ -18,6 +18,7 @@ from interfaces.srv import SetString
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from rospider_gazebo import arm_ik
+from rospider_gazebo.detections import box_centroid
 from sensor_msgs.msg import CameraInfo, Image, JointState
 from std_msgs.msg import Empty, String
 from std_srvs.srv import Trigger
@@ -44,17 +45,11 @@ def _box_centroid_and_area(box):
     two corners instead of the true centre. The spec's swappability promise
     -- a real YOLO node can replace color_detect.py without touching this
     file -- is only true if both conventions are handled here.
+
+    The arithmetic lives in rospider_gazebo/detections.py, shared with the
+    ported demo windows that read the same topic, and tested there.
     """
-    if len(box) == 4:
-        x1, y1, x2, y2 = box
-        return (x1 + x2) / 2.0, (y1 + y2) / 2.0, abs(x2 - x1) * abs(y2 - y1)
-    if len(box) == 8:
-        xs = box[0::2]
-        ys = box[1::2]
-        u = sum(xs) / 4.0
-        v = sum(ys) / 4.0
-        return u, v, (max(xs) - min(xs)) * (max(ys) - min(ys))
-    return None
+    return box_centroid(box)
 
 
 class State(Enum):

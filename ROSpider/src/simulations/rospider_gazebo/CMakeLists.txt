@@ -11,6 +11,17 @@ install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_pl
                  scripts/apriltag_detect.py scripts/yolo_detect.py scripts/mission.py
   DESTINATION lib/${PROJECT_NAME})
 
+# The Hiwonder demo windows ported from example/ -- see launch/vision_demo.launch.py.
+install(PROGRAMS scripts/color_position.py scripts/color_recognition.py
+                 scripts/apriltag_position.py scripts/apriltag_track.py
+                 scripts/ar_view.py scripts/kcf_track.py
+                 scripts/prevent_falling.py scripts/cross_bridge.py
+                 scripts/object_volume.py scripts/object_classification.py
+                 scripts/hand_detect.py scripts/hand_gesture.py
+                 scripts/finger_trajectory.py scripts/face_track.py
+                 scripts/pose_control.py scripts/webcam_publisher.py
+  DESTINATION lib/${PROJECT_NAME})
+
 # rospider_gazebo.maps: map name -> <workspace>/maps path, used by the launch files
 ament_python_install_package(${PROJECT_NAME})
 
@@ -29,6 +40,18 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_tag_behavior test/test_tag_behavior.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_yolo_settings test/test_yolo_settings.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_servo_map test/test_servo_map.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_pid test/test_pid.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_gestures test/test_gestures.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_depth_probe test/test_depth_probe.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_shape_detect test/test_shape_detect.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_detections test/test_detections.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_mission_plan test/test_mission_plan.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
