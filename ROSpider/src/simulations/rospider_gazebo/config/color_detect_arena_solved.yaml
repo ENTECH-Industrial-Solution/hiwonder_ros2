@@ -1,21 +1,26 @@
-# The instructors' answer to config/color_detect_arena.yaml: the pastel
-# cubes sit at S 60-95 in OpenCV HSV (the RGB cubes are at 200+), and the
-# light-grey floor at S about 11, so the floor of the S band is what a team
-# has to find -- low enough for the cube, high enough to leave the floor
-# out. Load it with color_config:=color_detect_arena_solved.yaml.
+# The instructors' answer to config/color_detect_arena.yaml. In LAB the
+# pastel cubes sit only 8-15 away from grey on the chroma axes (measured in
+# the arena: pink A 135-140, yellow B 140-148, sky B 120-123, against the
+# light-grey floor's A/B of 127-128/128-130), so the value a team has to
+# find is the chroma floor: pink's A min, yellow's B min, sky's B max --
+# close enough to grey to include the cube, not so close the floor comes
+# in. L min 100 keeps the wall posters (all darker) out, and the A/B caps
+# keep saturated colours out. Load it with
+# color_config:=color_detect_arena_solved.yaml.
 color_detect:
   ros__parameters:
     min_area_px: 300
     kernel_px: 5
     colors: ['pink', 'yellow', 'sky']
+    detect_type: circle
     pink:
-      lower: [160, 30, 100]
-      upper: [179, 255, 255]
+      min: [100, 133, 120]
+      max: [255, 160, 140]
     yellow:
-      lower: [20, 30, 100]
-      upper: [35, 255, 255]
+      min: [100, 115, 136]
+      max: [255, 133, 170]
     sky:
-      lower: [92, 30, 100]
-      upper: [112, 255, 255]
+      min: [100, 115, 105]
+      max: [255, 133, 125]
     tune: false
     tuned_path: '~/.ros/color_detect_arena_tuned.json'

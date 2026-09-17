@@ -30,8 +30,8 @@ from launch_ros.parameter_descriptions import ParameterValue
 from rospider_gazebo import stations
 from rospider_gazebo.maps import resolve_map
 
-# The pastel cubes and the station markers share these triples, so one HSV
-# band per colour sees both. Low saturation on purpose: see
+# The pastel cubes and the station markers share these triples, so one LAB
+# band per colour sees both. Low chroma on purpose: see
 # config/color_detect_arena.yaml.
 COLOURS = {
     'pink': (0.98, 0.72, 0.80, 1.0),
@@ -356,7 +356,7 @@ def generate_launch_description():
         DeclareLaunchArgument('detector', default_value='color', choices=['color', 'yolo'],
                               description='which node publishes /yolo/object_detect'),
         DeclareLaunchArgument('color_config', default_value='color_detect_arena.yaml',
-                              description='HSV bounds file for detector:=color: a name in '
+                              description='LAB bands file for detector:=color: a name in '
                                           'config/ or a path'),
         DeclareLaunchArgument('model', default_value='models/yolo/cubes.pt',
                               description='YOLO weights for detector:=yolo (the shipped '

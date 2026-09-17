@@ -1,21 +1,24 @@
-# Starter HSV bounds for the mini game's pastel cubes -- deliberately the
-# same saturation floor as the RGB cubes' bands, which pastel colours never
-# reach. Nothing is detected until a team lowers `lower[1]` (S) in the tuner
-# (tune:=true) and finds the point where the cube shows but the light-grey
-# floor does not. color_detect_arena_solved.yaml is the instructors' answer.
+# Starter LAB bands for the mini game's pastel cubes -- deliberately with
+# chroma floors the pastels never reach (pink's A min, yellow's B min, sky's
+# B max each sit 40 beyond the real value), the same idea as the RGB cubes'
+# bands, which want strong colour. Nothing is detected until a team moves
+# that one slider in the LAB_Tool window (tune:=true) to the point where
+# the cube shows but the light-grey floor does not.
+# color_detect_arena_solved.yaml is the instructors' answer.
 color_detect:
   ros__parameters:
     min_area_px: 300
     kernel_px: 5
     colors: ['pink', 'yellow', 'sky']
+    detect_type: circle
     pink:
-      lower: [160, 120, 80]
-      upper: [179, 255, 255]
+      min: [100, 173, 120]
+      max: [255, 200, 140]
     yellow:
-      lower: [20, 120, 80]
-      upper: [35, 255, 255]
+      min: [100, 115, 176]
+      max: [255, 133, 210]
     sky:
-      lower: [95, 120, 80]
-      upper: [110, 255, 255]
+      min: [100, 115, 65]
+      max: [255, 133, 85]
     tune: false
     tuned_path: '~/.ros/color_detect_arena_tuned.json'
