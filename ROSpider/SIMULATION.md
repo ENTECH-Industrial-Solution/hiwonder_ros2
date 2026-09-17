@@ -300,6 +300,9 @@ Gazebo เชื่อมลูกบาศก์ทั้งสามเข้�
 
 ```bash
 ros2 launch rospider_gazebo pick_place.launch.py tune:=true
+# หรือแบบเดียวกับคู่มือ: เปิดกล้อง (Gazebo) ก่อน แล้วเปิดเครื่องมือ
+ros2 launch rospider_gazebo depth_camera.launch.py
+ros2 launch rospider_gazebo lab_tool.launch.py
 ```
 
 เปิดหน้าต่าง `LAB_Tool 1.0` ขึ้นมาอีกบาน วางหน้าตาตาม **LAB_Tool ของหุ่นจริง** (คู่มือ Hiwonder หัวข้อ 6.1): ซ้ายคือ mask ของสีที่กำลังเลือก ขวาคือภาพกล้อง ใต้ภาพเป็นแถว `L` `A` `B` แถวละ slider `min` กับ `max` (0-255 พิมพ์ตัวเลขในช่องข้าง slider ได้) ฝั่งขวาคือ `Color list` เลือกสี กับปุ่ม `Add` / `Delete` / `Save` / `Quit` ระหว่างจูนโหนดยัง publish `/yolo/object_detect` และ `/color_detect/image_result` ตามปกติ จึงเห็นผลของ slider ต่อการตรวจจับได้ทันที
@@ -770,6 +773,26 @@ ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
 ```
 
 กด `q` หรือ `Esc` ในหน้าต่างเพื่อปิด ทุกเดโมยัง publish ภาพเดียวกันที่ `/<ชื่อเดโม>/image_result` ด้วย (ดูผ่าน `rqt_image_view` หรือรันแบบไม่มีจอด้วย `show:=false` ก็ได้)
+
+### คำสั่งเดียวกับคู่มือ Hiwonder
+
+จะพิมพ์ตามคู่มือก็ได้: ทุก launch ของ `example` ในคู่มือมีชื่อเดียวกันใน `rospider_gazebo` (ไฟล์สองบรรทัดที่เรียก `vision_demo.launch.py` ให้ ดู `rospider_gazebo/demo_launch.py`) อาร์กิวเมนต์ตามหลังส่งผ่านไปเหมือนกัน เช่น `color:=red` เปลี่ยนแค่ชื่อ package จาก `example` / `peripherals` เป็น `rospider_gazebo` ส่วน `~/.stop_ros.sh` ไม่ต้องทำ เพราะใน sim ไม่มี service เริ่มอัตโนมัติ
+
+| หัวข้อในคู่มือ | บนหุ่นจริง | ใน sim |
+|---|---|---|
+| 6.1 เปิดกล้อง | `ros2 launch peripherals depth_camera.launch.py` | `ros2 launch rospider_gazebo depth_camera.launch.py` (= เปิด Gazebo ทั้งตัว กล้องอยู่ในโมเดลหุ่น) |
+| 6.1 LAB_Tool | `python3 ~/software/lab_tool/main.py` | `ros2 launch rospider_gazebo lab_tool.launch.py` (`config:=color_detect_arena.yaml` สำหรับเกม) |
+| 6.2 | `ros2 launch example color_recognition_node.launch.py` | `ros2 launch rospider_gazebo color_recognition_node.launch.py` |
+| 6.3 | `ros2 launch example apriltag_recognition.launch.py` | `ros2 launch rospider_gazebo apriltag_recognition.launch.py` (เปิดหน้าต่าง `apriltag_position` ซึ่งคือภาพของ detector พอดี) |
+| 6.4 | `ros2 launch example ar.launch.py` | `ros2 launch rospider_gazebo ar.launch.py` |
+| 6.5 | `ros2 launch example color_position.launch.py color:=red` | `ros2 launch rospider_gazebo color_position.launch.py color:=red` |
+| 6.7 | `ros2 launch example apriltag_position.launch.py` | `ros2 launch rospider_gazebo apriltag_position.launch.py` |
+| 6.8 | `ros2 launch example apriltag_track.launch.py` | `ros2 launch rospider_gazebo apriltag_track.launch.py` |
+| 6.10 | `ros2 launch example kcf.launch.py` | `ros2 launch rospider_gazebo kcf.launch.py` |
+| RGB-D | `ros2 launch example prevent_falling.launch.py` / `cross_bridge` / `object_volume_measurement` / `object_classification` | ชื่อเดียวกันใน `rospider_gazebo` |
+| 7.3.2–7.3.6 | `ros2 launch example finger_trajectory.launch.py` / `hand_detect` / `hand_gesture` / `face_track` / `pose_control` | ชื่อเดียวกันใน `rospider_gazebo` — ค่าเริ่มต้นเป็น `source:=webcam` เพราะในโลก sim ไม่มีคน |
+
+ที่ไม่มี: 6.6 `object_tracking` และ 6.9 `line_following` เป็นโหนดใน package `app` ที่ยังไม่ได้ย้ายมา
 
 ### มีเดโมอะไรบ้าง
 
