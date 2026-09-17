@@ -25,7 +25,7 @@ picking things up in the simulation is scripts/pick_and_place.py's job.
 import cv2
 import numpy as np
 from rospider_gazebo import shape_detect, vision_demo
-from rospider_gazebo.vision_demo import VisionDemo, banner, depth_color_map
+from rospider_gazebo.vision_demo import VisionDemo, depth_color_map
 
 #: Upstream's goto_default(), servo ids 19-24.
 LOOK_POSE = ((19, 500), (20, 500), (21, 130), (22, 130), (23, 500), (24, 700))
@@ -40,6 +40,8 @@ CALIBRATION_FRAMES = 50
 
 
 class ObjectVolumeNode(VisionDemo):
+
+    window = 'Object Classification (ROI Mode)'
 
     def __init__(self):
         super().__init__('object_volume', depth=True,
@@ -58,8 +60,9 @@ class ObjectVolumeNode(VisionDemo):
 
     def process(self, frame):
         if self.depth_mm is None or self.intrinsics is None:
-            return banner(frame, 'WAITING FOR DEPTH', scale=0.7,
-                          color=(200, 200, 200))
+            self.get_logger().info('waiting for depth and camera_info',
+                                   throttle_duration_sec=2.0)
+            return frame
         depth_mm = self.depth_mm
         if depth_mm.shape[:2] != frame.shape[:2]:
             frame = cv2.resize(frame, (depth_mm.shape[1], depth_mm.shape[0]))
@@ -68,7 +71,8 @@ class ObjectVolumeNode(VisionDemo):
                                             self.plane_distance)
         view = depth_color_map(depth_mm, DEPTH_CEILING)
         if self.debug:
-            return self._side_by_side(self._calibrate(view, near), frame)
+            self._calibrate(near)
+            return self._side_by_side(view, frame)
 
         objects = shape_detect.recognise(depth_mm, frame, self.intrinsics,
                                          self.plane_distance, near, self.roi)
@@ -92,11 +96,11 @@ class ObjectVolumeNode(VisionDemo):
         outside[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = False
         view[outside] = (view[outside] * 0.3).astype(np.uint8)
 
-    def _calibrate(self, view, near):
+    def _calibrate(self, near):
+        """Average the floor distance, logging each sample as upstream does."""
         if near > 0:
             self.samples.append(near)
-        banner(view, f'CALIBRATING {len(self.samples)}/{CALIBRATION_FRAMES}',
-               scale=0.6, color=(0, 200, 255))
+        self.get_logger().info(f'Calibrating Ground: {near} mm')
         if len(self.samples) >= CALIBRATION_FRAMES:
             self.plane_distance = round(sum(self.samples) / len(self.samples))
             self.debug = False
@@ -104,7 +108,6 @@ class ObjectVolumeNode(VisionDemo):
             self.get_logger().info(
                 f'floor plane is {self.plane_distance} mm away -- pass '
                 f'plane_distance:={self.plane_distance} next time')
-        return view
 
     def _side_by_side(self, view, frame):
         cv2.rectangle(view, (self.roi[2], self.roi[0]),

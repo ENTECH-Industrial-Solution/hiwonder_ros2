@@ -18,8 +18,9 @@ simulation with its own closed-form IK. So this demo recognises and reports;
 """
 
 import cv2
+import numpy as np
 from rospider_gazebo import shape_detect, vision_demo
-from rospider_gazebo.vision_demo import VisionDemo, banner, depth_color_map
+from rospider_gazebo.vision_demo import VisionDemo, depth_color_map
 
 #: Upstream's goto_default(), servo ids 19-24.
 LOOK_POSE = ((19, 500), (20, 500), (21, 130), (22, 130), (23, 500), (24, 700))
@@ -30,10 +31,10 @@ ROI = [50, 350, 150, 500]
 DEPTH_CEILING = 350
 CALIBRATION_FRAMES = 50
 
-DRAW_BGR = {'red': (0, 0, 255), 'green': (0, 255, 0), 'blue': (255, 0, 0)}
-
 
 class ObjectClassificationNode(VisionDemo):
+
+    window = 'depth'
 
     def __init__(self):
         super().__init__('object_classification', depth=True,
@@ -54,9 +55,14 @@ class ObjectClassificationNode(VisionDemo):
             f'reporting {self.shapes}')
 
     def process(self, frame):
+        """Upstream's window: depth map | rgb. Every object gets a white
+        box; the nearest one of the wanted shapes -- the one upstream would
+        go and pick -- gets its name in the middle and a red rotated box.
+        The rgb half carries the ROI. What was seen is logged."""
         if self.depth_mm is None or self.intrinsics is None:
-            return banner(frame, 'WAITING FOR DEPTH', scale=0.7,
-                          color=(200, 200, 200))
+            self.get_logger().info('waiting for depth and camera_info',
+                                   throttle_duration_sec=2.0)
+            return frame
         depth_mm = self.depth_mm
         if depth_mm.shape[:2] != frame.shape[:2]:
             frame = cv2.resize(frame, (depth_mm.shape[1], depth_mm.shape[0]))
@@ -65,38 +71,38 @@ class ObjectClassificationNode(VisionDemo):
                                              self.plane_distance)
         view = depth_color_map(depth_mm, DEPTH_CEILING)
         if self.debug:
-            return self._calibrate(view, near)
+            self._calibrate(near)
+            return np.concatenate([view, frame], axis=1)
 
-        objects = [o for o in shape_detect.recognise(
-            depth_mm, frame, self.intrinsics, self.plane_distance, near,
-            self.roi) if o.kind in self.shapes]
-
-        for row, obj in enumerate(objects):
-            colour = shape_detect.colour_name(obj.bgr)
+        objects = shape_detect.recognise(depth_mm, frame, self.intrinsics,
+                                         self.plane_distance, near, self.roi)
+        for obj in objects:
             x, y, w, h = obj.box
             cv2.rectangle(view, (x, y), (x + w, y + h), (255, 255, 255), 2)
-            cv2.putText(view, f'{colour} {obj.name}', (x, y - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        DRAW_BGR.get(colour, (255, 255, 255)), 2)
-            px, py, pz = obj.position
-            cv2.putText(view,
-                        f'{colour} {obj.name}  '
-                        f'({px:+.3f}, {py:+.3f}, {pz:.3f}) m  '
-                        f'{obj.angle:.0f} deg',
-                        (20, view.shape[0] - 20 - row * 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        cv2.rectangle(view, (self.roi[2], self.roi[0]),
-                      (self.roi[3], self.roi[1]), (255, 255, 255), 2)
-        if not objects:
-            banner(view, 'NOTHING ON THE TABLE', scale=0.6,
-                   color=(200, 200, 200))
-        return view
+        wanted = [o for o in objects if o.kind in self.shapes]
+        if wanted:
+            target = min(wanted, key=lambda o: o.depth)
+            x, y, w, h = target.box
+            cv2.putText(view, target.kind, (x + w // 2, y + h // 2 - 10),
+                        cv2.FONT_HERSHEY_COMPLEX, 1.0, (0, 0, 0), 2, cv2.LINE_AA)
+            cv2.putText(view, target.kind, (x + w // 2, y + h // 2 - 10),
+                        cv2.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 1)
+            cv2.drawContours(view, [np.int32(cv2.boxPoints(target.rect))], -1,
+                             (0, 0, 255), 2, cv2.LINE_AA)
+            px, py, pz = target.position
+            self.get_logger().info(
+                f'{shape_detect.colour_name(target.bgr)} {target.name} '
+                f'({px:+.3f}, {py:+.3f}, {pz:.3f}) m {target.angle:.0f} deg',
+                throttle_duration_sec=1.0)
+        cv2.rectangle(frame, (self.roi[2], self.roi[0]),
+                      (self.roi[3], self.roi[1]), (255, 255, 0), 1)
+        return np.concatenate([view, frame], axis=1)
 
-    def _calibrate(self, view, near):
+    def _calibrate(self, near):
+        """Average the floor distance, logging each sample as upstream does."""
         if near > 0:
             self.samples.append(near)
-        banner(view, f'CALIBRATING {len(self.samples)}/{CALIBRATION_FRAMES}',
-               scale=0.6, color=(0, 200, 255))
+        self.get_logger().info(f'Calibrating Ground: {near} mm')
         if len(self.samples) >= CALIBRATION_FRAMES:
             self.plane_distance = round(sum(self.samples) / len(self.samples))
             self.debug = False
@@ -104,7 +110,6 @@ class ObjectClassificationNode(VisionDemo):
             self.get_logger().info(
                 f'floor plane is {self.plane_distance} mm away -- pass '
                 f'plane_distance:={self.plane_distance} next time')
-        return view
 
 
 def main():
