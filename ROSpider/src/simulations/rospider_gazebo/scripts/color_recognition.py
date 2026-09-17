@@ -3,7 +3,8 @@
 
 A port of example/opencv_example/include/color_recognition_node.py. Once a
 colour has held for STABLE_FRAMES the robot plays that colour's little arm
-move, exactly the pulses upstream sends, and the window captions the colour.
+move, exactly the pulses upstream sends. The window is the detector's frame
+untouched, as upstream shows it; the colour is logged when a move starts.
 
 Two upstream pieces have no simulated counterpart and are dropped:
 the buzzer (ros_robot_controller/set_buzzer -- there is no sound in Gazebo,
@@ -22,7 +23,7 @@ import time
 from interfaces.msg import ObjectsInfo
 from rospider_gazebo import vision_demo
 from rospider_gazebo.detections import largest
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
 #: Upstream's init_process() pose, servo ids 19-24.
 LOOK_POSE = ((19, 500), (20, 750), (21, 200), (22, 150), (23, 500), (24, 700))
@@ -41,6 +42,8 @@ STEP_TIME = 0.5
 
 
 class ColorRecognitionNode(VisionDemo):
+
+    window = 'image'
 
     def __init__(self):
         super().__init__('color_recognition',
@@ -82,18 +85,16 @@ class ColorRecognitionNode(VisionDemo):
             self.acting = False
 
     def process(self, frame):
-        if self.acting:
-            return banner(frame, self.target.upper())
-        if self.color in MOVES:
-            self.count += 1
-            if self.count > STABLE_FRAMES:
+        if not self.acting:
+            if self.color in MOVES:
+                self.count += 1
+                if self.count > STABLE_FRAMES:
+                    self.count = 0
+                    self.target = self.color
+                    self.acting = True
+            else:
                 self.count = 0
-                self.target = self.color
-                self.acting = True
-        else:
-            self.count = 0
-        return banner(frame, self.color.upper() if self.color else 'NONE',
-                      color=(255, 255, 0) if self.color else (200, 200, 200))
+        return frame
 
     def on_stop(self):
         self.acting = False

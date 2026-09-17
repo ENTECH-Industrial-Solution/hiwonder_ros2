@@ -18,20 +18,18 @@ import cv2
 from interfaces.msg import ObjectsInfo
 from rospider_gazebo import vision_demo
 from rospider_gazebo.detections import largest
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
 #: Camera-down look pose, as upstream's color_position sets it: servo ids
 #: 19-24 at the pulses its init_process() uses.
 LOOK_POSE = ((19, 500), (20, 670), (21, 40), (22, 210), (23, 500), (24, 700))
 
-#: Frames a colour has to hold before the window calls it the target, so a
-#: single stray detection does not relabel the scene.
-STABLE_FRAMES = 30
-
 DRAW = (0, 255, 255)
 
 
 class ColorPositionNode(VisionDemo):
+
+    window = 'image'
 
     def __init__(self):
         super().__init__('color_position',
@@ -39,8 +37,6 @@ class ColorPositionNode(VisionDemo):
                          servos=True)
         self.wanted = self.param('color', '')
         self.target = None
-        self.stable = 0
-        self.last_name = ''
         self.create_subscription(
             ObjectsInfo, str(self.param('objects_topic', '/yolo/object_detect')),
             self.objects_callback, 1)
@@ -58,24 +54,20 @@ class ColorPositionNode(VisionDemo):
         best = largest(objects)
         if best is None:
             self.target = None
-            self.stable = 0
-            self.last_name = ''
             return
         obj, (u, v, _area) = best
         self.target = (obj.class_name, u, v)
-        self.stable = self.stable + 1 if obj.class_name == self.last_name else 0
-        self.last_name = obj.class_name
+        self.get_logger().info(f'(x, y):{(u, v)}', throttle_duration_sec=0.5)
 
     def process(self, frame):
+        """Upstream's overlay: a dot on the centre and its coordinates."""
         if self.target is None:
-            return banner(frame, 'NO TARGET', color=(200, 200, 200))
-        name, u, v = self.target
+            return frame
+        _name, u, v = self.target
         cv2.circle(frame, (int(u), int(v)), 5, DRAW, -1)
         cv2.putText(frame, '({:0.1f}, {:0.1f})'.format(u, v),
                     (int(u), int(v) + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                     DRAW, 2)
-        if self.stable > STABLE_FRAMES:
-            banner(frame, name.upper())
         return frame
 
     def on_stop(self):
