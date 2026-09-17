@@ -11,4 +11,3 @@ __pycache__/
 # (GitHub rejects files over 100 MB); 2D maps (.yaml/.pgm) are small and can be committed
 /maps/**/*.db
 
-/docs
