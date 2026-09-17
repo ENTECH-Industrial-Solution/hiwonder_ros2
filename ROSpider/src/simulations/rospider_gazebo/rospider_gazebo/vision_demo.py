@@ -135,11 +135,14 @@ class ServoClient:
     servo_controller.bus_servo_control.set_servo_position() takes, so a
     ported demo keeps the pulses it was written with.
 
-    Leg joints go out as a full 18-joint trajectory even when one leg is
-    being commanded: joint_trajectory_controller rejects a partial goal
-    unless allow_partial_joints_goal is set, so the joints left out are
-    filled from the last /joint_states (0 -- the standing pose -- until one
-    arrives).
+    Every group goes out as a full trajectory even when one joint is being
+    commanded -- the pan/tilt loops send servos 19 and 22 alone --
+    because joint_trajectory_controller rejects a partial goal ("Joints on
+    incoming trajectory don't match the controller joints") unless
+    allow_partial_joints_goal is set. The joints left out are filled from
+    the last /joint_states; a partial command that arrives before the first
+    joint_states is dropped rather than filled with zeros, which would
+    fling the arm to its zero pose.
     """
 
     def __init__(self, node):
@@ -165,20 +168,33 @@ class ServoClient:
     def set_joint_angles(self, angles, duration=1.0):
         """angles as {joint name: radians}, moved into over `duration`."""
         groups = (
-            (self.arm_pub, servo_map.ARM_JOINTS, False),
-            (self.gripper_pub, servo_map.GRIPPER_JOINTS, False),
-            (self.leg_pub, servo_map.LEG_JOINTS, True),
+            (self.arm_pub, servo_map.ARM_JOINTS),
+            (self.gripper_pub, servo_map.GRIPPER_JOINTS),
+            (self.leg_pub, servo_map.LEG_JOINTS),
         )
-        for publisher, joints, fill in groups:
-            wanted = [j for j in joints if j in angles]
-            if not wanted:
+        for publisher, joints in groups:
+            if not any(j in angles for j in joints):
                 continue
-            names = list(joints) if fill else wanted
-            values = [float(angles.get(j, self.joint_state.get(j, 0.0)))
-                      for j in names]
-            self._publish(publisher, names, values, duration)
+            missing = [j for j in joints
+                       if j not in angles and j not in self.joint_state]
+            if missing:
+                self.node.get_logger().warn(
+                    f'no /joint_states yet for {missing}; dropping a partial '
+                    'command rather than filling it with zeros',
+                    throttle_duration_sec=2.0)
+                continue
+            values = [float(angles.get(j, self.joint_state.get(j)))
+                      for j in joints]
+            self._publish(publisher, list(joints), values, duration)
 
     def _publish(self, publisher, names, positions, duration):
+        # The first command usually goes out before the controller has
+        # matched the publisher, and a message with no subscriber is lost;
+        # a demo's start pose then never happens. Give it a moment.
+        for _ in range(20):
+            if publisher.get_subscription_count() > 0:
+                break
+            time.sleep(0.1)
         point = JointTrajectoryPoint()
         point.positions = positions
         point.time_from_start.sec = int(duration)

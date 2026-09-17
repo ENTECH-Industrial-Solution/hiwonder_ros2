@@ -789,10 +789,12 @@ ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
 | 6.7 | `ros2 launch example apriltag_position.launch.py` | `ros2 launch rospider_gazebo apriltag_position.launch.py` |
 | 6.8 | `ros2 launch example apriltag_track.launch.py` | `ros2 launch rospider_gazebo apriltag_track.launch.py` |
 | 6.10 | `ros2 launch example kcf.launch.py` | `ros2 launch rospider_gazebo kcf.launch.py` |
+| 8.2 | `ros2 launch example color_track_node.launch.py` | `ros2 launch rospider_gazebo color_track_node.launch.py` (แขนหันตามก้อนสี) |
+| 8.7 | `ros2 launch example track_and_grab.launch.py` | `ros2 launch rospider_gazebo track_and_grab.launch.py` (เปิดทั้ง Gazebo + แท่น + `pick_and_place` ให้เอง ไม่ต้องเปิดอย่างอื่นก่อน) |
 | RGB-D | `ros2 launch example prevent_falling.launch.py` / `cross_bridge` / `object_volume_measurement` / `object_classification` | ชื่อเดียวกันใน `rospider_gazebo` |
 | 7.3.2–7.3.6 | `ros2 launch example finger_trajectory.launch.py` / `hand_detect` / `hand_gesture` / `face_track` / `pose_control` | ชื่อเดียวกันใน `rospider_gazebo` — ค่าเริ่มต้นเป็น `source:=webcam` เพราะในโลก sim ไม่มีคน |
 
-ที่ไม่มี: 6.6 `object_tracking` และ 6.9 `line_following` เป็นโหนดใน package `app` ที่ยังไม่ได้ย้ายมา
+ที่ไม่มี: 6.6 `object_tracking`, 6.9 `line_following`, 8.3 `intelligent_kick` เป็นโหนดใน package `app` ที่ยังไม่ได้ย้ายมา; 8.4 `automatic_pick` + `navigation_transport` มี mini game (ข้อ 10) ทำหน้าที่เดียวกันในชื่ออื่น; 8.1 เป็นโปรแกรมปรับ servo บน PC ต่อบอร์ดจริง; 8.8 ครึ่งที่หยิบแยกหมวดยังไม่มี
 
 ### มีเดโมอะไรบ้าง
 
@@ -804,6 +806,8 @@ ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
 | `apriltag_track` | `opencv_example/apriltag_track.py` | เดินเข้าไปหาป้ายที่กำหนดแล้วหยุดที่ระยะ `stop_distance` | เหมือนบน |
 | `ar_view` | `opencv_example/ar.py` | วาดลูกบาศก์ (หรือโมเดล `.obj`) ทับป้าย AprilTag | มีป้ายในโลก |
 | `kcf_track` | `opencv_example/kcf.py` | กด `s` ลากกรอบเลือกเป้าหมาย แล้วหุ่นหันตาม | — |
+| `color_track` | `color_track/color_track_node.py` | แขน (servo 19 หัน, 22 ก้ม/เงย) หันตามก้อนสีให้อยู่กลางภาพ; หน้าต่างคือภาพ `result` ของ detector | ตัวตรวจจับ (launch เปิดให้เอง) + มีก้อนสีในโลก |
+| `track_and_grab` | `rgbd_example/track_and_grab.py` | RGB \| depth, วงกลมรอบก้อน, `Dist: NNNmm`; หันตามก้อน พอนิ่ง 2 วิ สั่ง `pick_and_place` หยิบแล้ววางข้างลำตัว | `pick_place.launch.py` (launch ของมันเปิดให้เอง) |
 | `prevent_falling` | `rgbd_example/prevent_falling_node.py` | เดินหน้า เจอขอบโต๊ะ/ขั้นบันไดแล้วเลี้ยวหนี | กล้อง depth |
 | `cross_bridge` | `rgbd_example/cross_bridge_node.py` | คลานข้ามสะพานแคบ เบี่ยงกลับเข้ากลางเอง | ต้องสร้างสะพานในโลกเอง |
 | `object_volume` | `rgbd_example/object_volume_measurement.py` | แยกทรงกลม/ทรงกระบอก/กล่อง จาก depth แล้วคำนวณปริมาตร | กล้อง depth + มีของวางอยู่ |
@@ -860,7 +864,7 @@ ros2 launch rospider_gazebo vision_demo.launch.py demo:=prevent_falling plane_di
 - **คำสั่ง servo** — สคริปต์ยังเขียนด้วย pulse แบบ Hiwonder (`(19, 500), (20, 750), ...`) แล้ว `rospider_gazebo/servo_map.py` แปลงเป็นเรเดียนส่งเข้า `arm_controller` / `gripper_controller` / `leg_controller` ตารางแปลงลอกมาจาก `driver/servo_controller/config/servo_controller.yaml` ตรงๆ (servo หมุน 240° ต่อ 1000 pulse, `init` คือ 0 เรเดียน, ข้อที่ `min` > `max` คือหมุนกลับทาง)
 - **ไม่มีเสียง** — เดโมที่หุ่นจริงร้องบี๊บ (`color_recognition`, `hand_gesture`, `pose_control`) เงียบไป ดูได้จาก log ใน terminal
 - **ไม่มี action group** — `hand_gesture` ของจริงเล่นท่าที่อัดไว้ใน `/home/ubuntu/software/actionset_editor/ActionGroups` ใน sim จับคู่ท่ามือกับการเคลื่อนที่สั้นๆ ผ่าน `/controller/cmd_vel` แทน (ดูตาราง `MOVES` ในไฟล์)
-- **`face_track` ไม่ใช้ IK** — ของจริงคำนวณความสูงข้อมือผ่าน service `arm_kinematics` (ไลบรารี ARM) ใน sim กล้องอยู่บน `link4` อยู่แล้ว เลยสั่ง servo 19 (หัน) กับ servo 22 (ก้ม/เงย) ตรงๆ ผลลัพธ์ที่ตาเห็นเหมือนกัน
+- **`face_track` / `color_track` / `track_and_grab` ไม่ใช้ IK** — ของจริงคำนวณความสูงข้อมือผ่าน service `arm_kinematics` (ไลบรารี ARM) ใน sim กล้องอยู่บน `link4` อยู่แล้ว เลยสั่ง servo 19 (หัน) กับ servo 22 (ก้ม/เงย) ตรงๆ ผลลัพธ์ที่ตาเห็นเหมือนกัน (`color_track` เริ่มที่ท่าก้มหาแท่น เพราะใน sim ก้อนสีวางอยู่บนโต๊ะ ไม่ได้มีคนถือหน้ากล้อง) ส่วนการหยิบของ `track_and_grab` ใช้ `pick_and_place` (`~/pick` แล้ว `~/place` ที่จุดข้างลำตัวซ้าย ตามที่ของจริงเหวี่ยง servo 19 ไป 850 ก่อนปล่อย)
 - **`pose_control` ไปแย่ง `leg_controller` กับ `sim_gait`** — อย่าสั่งหุ่นเดินระหว่างที่กำลังเลียนแบบท่า ไม่งั้นสองตัวจะแย่งกันสั่งขาหน้า
 - **`apriltag_track` กับ behaviours ของ `apriltag_detect` ขับหุ่นทั้งคู่** — เปิดทีละอย่าง
 - **`kcf_track` อาจไม่ได้ใช้ KCF จริง** — OpenCV 5 (ที่ pip ลงให้) ไม่มี KCF และ CSRT แล้ว โค้ดจะไล่หา KCF → CSRT → MIL แล้ว log บอกว่าได้ตัวไหน

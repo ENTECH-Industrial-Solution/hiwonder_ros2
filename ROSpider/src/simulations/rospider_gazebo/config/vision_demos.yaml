@@ -94,6 +94,23 @@ finger_trajectory:
     detection_confidence: 0.6
     tracking_confidence: 0.05
 
+color_track:
+  ros__parameters:
+    color: red               # the block to follow, as upstream's default
+    start: true              # false: wait for ~/start
+    pan_gain: 0.055          # pulses per pixel of horizontal error
+    tilt_gain: 0.05          # pulses per pixel of vertical error
+
+track_and_grab:
+  ros__parameters:
+    color: red
+    start: true
+    pan_gain: 0.055
+    tilt_gain: 0.05
+    # "x y z" in base_footprint metres, where the grabbed block is put down:
+    # to the left, out of the camera's view, as upstream swings it aside.
+    place_point: '0.02 0.16 0.035'
+
 face_track:
   ros__parameters:
     detection_confidence: 0.3

@@ -20,6 +20,7 @@ install(PROGRAMS scripts/color_position.py scripts/color_recognition.py
                  scripts/hand_detect.py scripts/hand_gesture.py
                  scripts/finger_trajectory.py scripts/face_track.py
                  scripts/pose_control.py scripts/webcam_publisher.py
+                 scripts/color_track.py scripts/track_and_grab.py
   DESTINATION lib/${PROJECT_NAME})
 
 # rospider_gazebo.maps: map name -> <workspace>/maps path, used by the launch files
