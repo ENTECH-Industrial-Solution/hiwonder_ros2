@@ -36,10 +36,48 @@ from sensor_msgs.msg import Image
 RANGE_RGB = {'red': (0, 50, 255), 'green': (50, 255, 0), 'blue': (255, 50, 0)}
 
 TUNE_TITLE = 'LAB_Tool 1.0'
-LAB_HELP = ('LAB is composed of one lightness channel and two color channels. '
-            'And each color is represented by three values, including L, A '
-            'and B\nL refers to lightness;  A refers to the components from '
-            'green to red;  B refers to the components from blue to yellow')
+LAB_HELP = {
+    'English': (
+        'LAB is composed of one lightness channel and two color channels. '
+        'And each color is represented by three values, including L, A and B\n'
+        'L*refers to lightness;  A*refers to the components from green to '
+        'red;  B*refers to the components from blue to yellow'),
+    '中文': (
+        'LAB由一个亮度通道和两个颜色通道组成，每种颜色由L、A、B三个值表示\n'
+        'L表示亮度；A表示从绿色到红色的分量；B表示从蓝色到黄色的分量'),
+}
+
+
+def lab_wheel(size=100, margin=10, lightness=190, bg=(217, 217, 217)):
+    """The a/b colour disc LAB_Tool shows beside its sliders, as BGR.
+
+    Every pixel of the disc is the LAB colour at its position -- A left to
+    right, B bottom to top, at one fixed L -- so a reader sees which way a
+    slider moves a colour: right is red, left green, up yellow, down blue.
+    The axis ends are labelled in `margin` px of `bg` (the window grey)
+    round the disc, in LAB_Tool's tiny print.
+    """
+    half = size / 2.0
+    ys, xs = np.mgrid[0:size, 0:size]
+    a = (xs - half) / half
+    b = (half - ys) / half
+    inside = a * a + b * b <= 1.0
+    lab = np.zeros((size, size, 3), dtype=np.uint8)
+    lab[..., 0] = lightness
+    lab[..., 1] = np.clip(128 + a * 127, 0, 255)
+    lab[..., 2] = np.clip(128 + b * 127, 0, 255)
+    disc = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    disc[~inside] = bg
+    bgr = cv2.copyMakeBorder(disc, margin, margin, 2 * margin, 2 * margin,
+                             cv2.BORDER_CONSTANT, value=bg)
+    height, width = bgr.shape[:2]
+    for text, pos in (('+b*', (width // 2 - 7, 8)),
+                      ('-b*', (width // 2 - 7, height - 3)),
+                      ('-a*', (1, height // 2 + 3)),
+                      ('+a*', (width - 20, height // 2 + 3))):
+        cv2.putText(bgr, text, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.28, (60, 60, 60), 1,
+                    cv2.LINE_AA)
+    return bgr
 
 
 def draw_bgr(color, settings):
@@ -268,21 +306,29 @@ class ColorDetectNode(Node):
     def run_tuner(self):
         """Tk window laid out like Hiwonder's LAB_Tool 1.0. Main thread only.
 
-        Top: the selected colour's mask (left) and the camera (right).
-        Middle: L, A, B rows, each a min slider and a max slider, 0-255.
-        Right: the Color list, Add / Delete / Save, and Quit. Every slider
-        change applies to the running detector at once, so the mask,
-        /color_detect/image_result and /yolo/object_detect all follow.
-        Closing the window leaves the node detecting with the last values.
+        Top, in a red frame: the selected colour's mask (left) and the
+        camera (right). Below: L, A, B rows, each a min slider and a max
+        slider, 0-255, with LAB_Tool's -/+ buttons; the a/b colour disc;
+        the Color list with Add / Delete / Save; and, at the right, the
+        language switch for the help line, Mono (greyed out: the sim has
+        one camera) and Quit. Every slider change applies to the running
+        detector at once, so the mask, /color_detect/image_result and
+        /yolo/object_detect all follow. Closing the window leaves the node
+        detecting with the last values.
         """
         root = tk.Tk()
         root.title(TUNE_TITLE)
+        bg = root.cget('bg')
+        big = ('TkDefaultFont', 11)         # LAB_Tool's L/A/B and values
+        small = ('TkDefaultFont', 7)        # its help text
 
-        panes = ttk.Frame(root)
-        panes.grid(row=0, column=0, columnspan=2, padx=6, pady=6)
-        mask_label = ttk.Label(panes)
-        mask_label.grid(row=0, column=0, padx=(0, 4))
-        frame_label = ttk.Label(panes)
+        # --- video panes, in LAB_Tool's red frame -------------------------
+        panes = tk.Frame(root, highlightbackground=tkview.RED_FRAME,
+                         highlightthickness=1, bg=bg)
+        panes.grid(row=0, column=0, padx=6, pady=(6, 3))
+        mask_label = tk.Label(panes, bg='black', bd=0, padx=0, pady=0)
+        mask_label.grid(row=0, column=0)
+        frame_label = tk.Label(panes, bg='black', bd=0, padx=0, pady=0)
         frame_label.grid(row=0, column=1)
 
         with self._lock:
@@ -290,43 +336,93 @@ class ColorDetectNode(Node):
         colors = list(settings['colors'])
         selected = tk.StringVar(value=colors[0] if colors else '')
         message = tk.StringVar()
+        language = tk.StringVar(value='English')
+        help_text = tk.StringVar(value=LAB_HELP['English'])
         loading = [False]           # True while the sliders are being set
 
+        # --- the recognition adjustment area, in its own red frame ---------
+        # Four grey boxes side by side, as wide as the panes: sliders and
+        # help, colour disc, Color list, language + Mono/Quit.
+        area = tk.Frame(root, highlightbackground=tkview.RED_FRAME,
+                        highlightthickness=1, bg=bg)
+        area.grid(row=1, column=0, padx=6, pady=(3, 6), sticky='ew')
+
         # --- L / A / B rows --------------------------------------------
-        rows = ttk.Frame(root)
-        rows.grid(row=1, column=0, padx=6, pady=(0, 6), sticky='nw')
-        rows.columnconfigure(1, weight=1)
-        rows.columnconfigure(2, weight=1)
+        rows = tkview.box(area, bg=bg)
+        rows.pack(side='left', fill='both', expand=True, padx=(3, 2), pady=3)
         variables = {}              # (channel, 'min'|'max') -> IntVar
         for r, channel in enumerate('LAB'):
-            ttk.Label(rows, text=channel, width=2).grid(row=r, column=0)
+            tk.Label(rows, text=channel, width=2, bg=bg, font=big, pady=0).grid(
+                row=r, column=0, padx=(6, 0), pady=1)
             for c, edge in enumerate(('min', 'max')):
                 var = tk.IntVar(value=0)
                 variables[(channel, edge)] = var
-                tkview.LabeledScale(rows, f'{channel} {edge}', var, 0, 255, 1,
-                                    lambda: apply()).grid(
-                    row=r, column=1 + c, sticky='ew', padx=4)
-        ttk.Label(rows, text=LAB_HELP, justify='left', wraplength=620).grid(
-            row=3, column=0, columnspan=3, sticky='w', pady=(6, 0))
+                tkview.HiwonderScale(rows, var, 0, 255,
+                                     command=lambda: apply()).grid(
+                    row=r, column=1 + c, padx=(0, 6), pady=1)
+        rows.columnconfigure(3, weight=1)
+        rows.rowconfigure(3, weight=1)      # help box stays at the bottom
+        tk.Label(rows, textvariable=help_text, justify='left', anchor='w',
+                 bg='white', font=small, wraplength=440, padx=3, pady=1,
+                 highlightbackground=tkview.BOX, highlightthickness=1).grid(
+            row=3, column=0, columnspan=4, sticky='sew', padx=3, pady=(3, 3))
 
-        # --- Color list and buttons ------------------------------------
-        side = ttk.Frame(root)
-        side.grid(row=1, column=1, padx=6, pady=(0, 6), sticky='n')
-        ttk.Label(side, text='Color list').grid(row=0, column=0)
+        # --- colour disc ------------------------------------------------
+        wheel = tkview.photo_from_bgr(lab_wheel())
+        wheel_box = tkview.box(area, bg=bg)
+        wheel_box.pack(side='left', fill='y', padx=2, pady=3)
+        wheel_label = tk.Label(wheel_box, image=wheel, bg=bg)
+        wheel_label.image = wheel
+        wheel_label.pack(expand=True)
+
+        # --- Color list and the orange buttons ---------------------------
+        side = tkview.box(area, bg=bg)
+        side.pack(side='left', fill='y', padx=2, pady=3)
+        tk.Label(side, text='Color list', bg=bg).pack(pady=(3, 0))
+        style = ttk.Style(root)
+        style.configure('Orange.TCombobox', arrowcolor='black', padding=1)
+        style.map('Orange.TCombobox',
+                  fieldbackground=[('readonly', tkview.ORANGE)],
+                  background=[('readonly', tkview.ORANGE)],
+                  selectbackground=[('readonly', tkview.ORANGE)],
+                  selectforeground=[('readonly', 'black')])
         chooser = ttk.Combobox(side, textvariable=selected, values=colors,
-                               state='readonly', width=12)
-        chooser.grid(row=1, column=0, pady=(0, 6))
-        ttk.Button(side, text='Add', command=lambda: do_add()).grid(
-            row=2, column=0, sticky='ew')
-        ttk.Button(side, text='Delete', command=lambda: do_delete()).grid(
-            row=3, column=0, sticky='ew')
-        ttk.Button(side, text='Save',
-                   command=lambda: message.set(self.save_tuned())).grid(
-            row=4, column=0, sticky='ew')
-        ttk.Button(side, text='Quit', command=root.destroy).grid(
-            row=5, column=0, sticky='ew', pady=(12, 0))
-        ttk.Label(side, textvariable=message, wraplength=160,
-                  justify='left').grid(row=6, column=0, sticky='w', pady=(6, 0))
+                               state='readonly', width=7,
+                               style='Orange.TCombobox')
+        chooser.pack(padx=8, pady=(0, 4))
+        for text, command in (('Add', lambda: do_add()),
+                              ('Delete', lambda: do_delete()),
+                              ('Save', lambda: message.set(self.save_tuned()))):
+            tkview.flat_button(side, text, 54, 18, command=command,
+                               font=('TkDefaultFont', 10)).pack(pady=(0, 4))
+
+        # --- language, Mono, Quit -------------------------------------------
+        right = tk.Frame(area, bg=bg)
+        right.pack(side='left', fill='y', padx=(2, 3), pady=3)
+        radios = tkview.box(right, bg=bg)
+        radios.pack(fill='x')
+        for name in ('中文', 'English'):
+            tk.Radiobutton(radios, text=name, value=name, variable=language,
+                           bg=bg, activebackground=bg, highlightthickness=0,
+                           command=lambda: help_text.set(
+                               LAB_HELP[language.get()])).pack(anchor='w', padx=6)
+        buttons = tkview.box(right, bg=bg)
+        buttons.pack(fill='both', expand=True, pady=(6, 0))
+        tkview.flat_button(buttons, 'Mono', 66, 18, bg=tkview.GREY_BUTTON,
+                           state='disabled', font=('TkDefaultFont', 10)).pack(
+            padx=6, pady=(6, 4))
+        tkview.flat_button(buttons, 'Quit', 66, 18, bg=tkview.GREY_BUTTON,
+                           command=root.destroy, font=('TkDefaultFont', 10)).pack(
+            padx=6, pady=(0, 6))
+
+        # Status line under the area; LAB_Tool has none, so it only takes
+        # room while there is something to say.
+        status = tk.Label(root, textvariable=message, bg=bg, anchor='w',
+                          font=('TkDefaultFont', 8))
+        status.grid(row=2, column=0, sticky='w', padx=8, pady=(0, 4))
+        status.grid_remove()
+        message.trace_add('write', lambda *_a: (
+            status.grid() if message.get() else status.grid_remove()))
 
         def load_sliders():
             """Put the selected colour's band on the sliders."""
@@ -394,13 +490,13 @@ class ColorDetectNode(Node):
                 frame = self._last_frame
                 mask = self._last_masks.get(selected.get())
             if frame is not None:
-                photo = tkview.photo_from_bgr(frame, max_width=480)
+                photo = tkview.photo_from_bgr(frame, max_width=400)
                 frame_label.configure(image=photo)
                 frame_label.image = photo      # keep it alive
                 if mask is None:
                     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
                 shown = tkview.photo_from_bgr(
-                    cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), max_width=480)
+                    cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), max_width=400)
                 mask_label.configure(image=shown)
                 mask_label.image = shown
             root.after(50, refresh)
