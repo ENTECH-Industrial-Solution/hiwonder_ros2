@@ -18,7 +18,7 @@ shows which one it got. Set `tracker:=csrt` to pin one.
 import cv2
 from rospider_gazebo import vision_demo
 from rospider_gazebo.pid import PID, set_range
-from rospider_gazebo.vision_demo import VisionDemo, banner, create_tracker
+from rospider_gazebo.vision_demo import VisionDemo, create_tracker
 
 #: Upstream's init_process() pose, servo ids 19-24.
 LOOK_POSE = ((19, 500), (20, 750), (21, 200), (22, 150), (23, 500), (24, 700))
@@ -27,6 +27,8 @@ DRAW = (255, 255, 0)
 
 
 class KcfTrackNode(VisionDemo):
+
+    window = 'result'
 
     def __init__(self):
         super().__init__('kcf_track', cmd_vel=True, servos=True)
@@ -52,20 +54,21 @@ class KcfTrackNode(VisionDemo):
         return False
 
     def process(self, frame):
+        """Upstream's overlay: one cyan rectangle round the tracked box."""
         if self.select_next:
             self.select_next = False
             self._select(frame)
             return frame
 
         if self.tracker is None:
-            return banner(frame, 'PRESS S TO SELECT', scale=0.9,
-                          color=(200, 200, 200))
+            return frame
 
         found, box = self.tracker.update(frame)
         if not found:
             self.stop()
             self.pid_yaw.clear()
-            return banner(frame, 'TARGET LOST', color=(200, 200, 200))
+            self.get_logger().info('target lost', throttle_duration_sec=2.0)
+            return frame
 
         x, y, w, h = (int(v) for v in box)
         cv2.rectangle(frame, (x, y), (x + w, y + h), DRAW, 2)
@@ -78,8 +81,6 @@ class KcfTrackNode(VisionDemo):
         # negative output and the robot turns right.
         angular = set_range(self.pid_yaw.output, -10, 10) / 10.0 * self.turn_limit
         self.drive(0.0, angular)
-        banner(frame, f'{self.tracker_name.upper()}  w {angular:+.2f} rad/s',
-               scale=0.7)
         return frame
 
     def _select(self, frame):
