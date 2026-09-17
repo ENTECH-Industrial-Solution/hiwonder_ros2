@@ -28,6 +28,7 @@ simulator; this file is only the ROS plumbing.
 """
 
 import json
+import math
 import os
 import threading
 import time
@@ -56,6 +57,16 @@ from rospider_gazebo.tag_behavior import TagBehavior
 from sensor_msgs.msg import CameraInfo, Image
 
 TUNE_TITLE = 'apriltag_detect tune'
+
+#: Upstream's AXIS (apriltag_recognition.py) in half-tag units: the origin,
+#: three axis tips at 1.5, then a 360-point circle of radius 0.3 on the tag
+#: plane. Scaled by half the tag size at draw time, since the sim's pose is
+#: solved in metres.
+_AXIS_HALF_TAG = np.append(
+    np.float32([[0, 0, 0], [1.5, 0, 0], [0, 1.5, 0], [0, 0, 1.5]]),
+    np.float32([[0.3 * math.cos(math.radians(i)),
+                 0.3 * math.sin(math.radians(i)), 0] for i in range(360)]),
+    axis=0)
 
 # (key, label, from, to, resolution) for the detector sliders; corner
 # refinement is a pair of radio buttons instead.
@@ -785,12 +796,24 @@ class AprilTagNode(Node):
         return transform
 
     def _draw(self, frame, corners, tag_id, rvec, tvec):
-        cv2.polylines(frame, [corners.astype(np.int32)], True, (0, 255, 255), 2)
-        centre = corners.mean(axis=0).astype(int)
-        cv2.putText(frame, f'id {tag_id}', (int(centre[0]) - 20, int(centre[1])),
+        """Upstream's overlay (apriltag_recognition.py), colours in BGR:
+        corner dots, an axis triad on a filled disc, and idN under the tag."""
+        for pt in corners:
+            cv2.circle(frame, (int(pt[0]), int(pt[1])), 2, (255, 255, 0), -1)
+        axis = _AXIS_HALF_TAG * (self.tag_size / 2.0)
+        imgpts, _ = cv2.projectPoints(axis, rvec, tvec, self.camera_matrix,
+                                      self.dist_coeffs)
+        imgpts = np.int32(imgpts).reshape(-1, 2)
+        cv2.drawContours(frame, [imgpts[4:]], -1, (0, 255, 255), -1)
+        cv2.line(frame, tuple(imgpts[0]), tuple(imgpts[1]), (0, 0, 255), 3)
+        cv2.line(frame, tuple(imgpts[0]), tuple(imgpts[2]), (0, 255, 0), 3)
+        cv2.line(frame, tuple(imgpts[0]), tuple(imgpts[3]), (255, 0, 0), 3)
+        centre = corners.mean(axis=0)
+        text = 'id' + str(tag_id)
+        size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+        cv2.putText(frame, text,
+                    (int(centre[0] - size[0] / 2), int(centre[1] + size[1] + 25)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        cv2.drawFrameAxes(frame, self.camera_matrix, self.dist_coeffs,
-                          rvec, tvec, self.tag_size * 0.5)
 
 
 def main():

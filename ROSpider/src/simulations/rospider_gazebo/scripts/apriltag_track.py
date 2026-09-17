@@ -18,11 +18,10 @@ behaviours enabled; run only one of the two.
     ros2 launch rospider_gazebo vision_demo.launch.py demo:=apriltag_track target_tag:=1
 """
 
-import cv2
 from interfaces.msg import ApriltagsInfo
 from rospider_gazebo import vision_demo
 from rospider_gazebo.pid import PID, set_range
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
 #: Upstream's init_process() pose, servo ids 19-24.
 LOOK_POSE = ((19, 500), (20, 750), (21, 200), (22, 150), (23, 500), (24, 700))
@@ -32,10 +31,10 @@ YAW_DEADBAND = 20
 #: Metres off the standoff that still count as arrived.
 DISTANCE_DEADBAND = 0.03
 
-DRAW = (0, 255, 255)
-
 
 class AprilTagTrackNode(VisionDemo):
+
+    window = 'image'
 
     def __init__(self):
         super().__init__('apriltag_track',
@@ -64,13 +63,12 @@ class AprilTagTrackNode(VisionDemo):
                         None)
 
     def process(self, frame):
-        height, width = frame.shape[:2]
+        width = frame.shape[1]
         if self.tag is None:
             self.stop()
             self.pid_yaw.clear()
             self.pid_distance.clear()
-            return banner(frame, f'TAG {self.target_tag} LOST',
-                          color=(200, 200, 200))
+            return frame
 
         distance = self.tag.d / 1000.0
         linear = angular = 0.0
@@ -94,11 +92,6 @@ class AprilTagTrackNode(VisionDemo):
             self.pid_yaw.clear()
 
         self.drive(linear, angular)
-        cv2.circle(frame, (self.tag.x, self.tag.y), 6, DRAW, -1)
-        cv2.line(frame, (width // 2, 0), (width // 2, height), DRAW, 1)
-        banner(frame, f'id {self.tag.id}  {distance:.2f} m', scale=0.9)
-        cv2.putText(frame, f'v {linear:+.3f} m/s   w {angular:+.2f} rad/s',
-                    (10, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, DRAW, 2)
         return frame
 
     def on_stop(self):

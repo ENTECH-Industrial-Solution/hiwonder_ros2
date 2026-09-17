@@ -33,10 +33,14 @@ import cv2
 import numpy as np
 from rospider_gazebo import tags, vision_demo
 from rospider_gazebo.objloader import OBJ
-from rospider_gazebo.vision_demo import VisionDemo, banner
+from rospider_gazebo.vision_demo import VisionDemo
 
-CUBE_EDGE = (0, 255, 0)
-CUBE_TOP = (0, 0, 255)
+#: Upstream's draw_rectangle() colours, written for an RGB frame and
+#: translated to BGR: green base, red pillars, blue top; cyan corner dots.
+CUBE_BASE = (0, 255, 0)
+CUBE_PILLAR = (0, 0, 255)
+CUBE_TOP = (255, 0, 0)
+CORNER = (255, 255, 0)
 
 
 def cube_points(size):
@@ -51,9 +55,9 @@ def cube_points(size):
 def draw_cube(image, imgpts):
     """Upstream's draw_rectangle(): filled base, pillars, outlined top."""
     imgpts = np.int32(imgpts).reshape(-1, 2)
-    cv2.drawContours(image, [imgpts[:4]], -1, CUBE_EDGE, -3)
+    cv2.drawContours(image, [imgpts[:4]], -1, CUBE_BASE, -3)
     for i, j in zip(range(4), range(4, 8)):
-        cv2.line(image, tuple(imgpts[i]), tuple(imgpts[j]), (255, 255, 255), 3)
+        cv2.line(image, tuple(imgpts[i]), tuple(imgpts[j]), CUBE_PILLAR, 3)
     cv2.drawContours(image, [imgpts[4:]], -1, CUBE_TOP, 3)
     return image
 
@@ -88,6 +92,8 @@ def load_model(path, scale, yaw_deg, tag_size):
 
 class ArViewNode(VisionDemo):
 
+    window = 'result'
+
     def __init__(self):
         super().__init__('ar_view', camera_info='/depth_cam/rgb/camera_info')
         self.tag_size = float(self.param('tag_size', tags.TAG_SIZE))
@@ -114,8 +120,9 @@ class ArViewNode(VisionDemo):
 
     def process(self, frame):
         if self.intrinsics is None:
-            return banner(frame, 'WAITING FOR camera_info',
-                          scale=0.7, color=(200, 200, 200))
+            self.get_logger().info('waiting for camera_info',
+                                   throttle_duration_sec=2.0)
+            return frame
         camera_matrix = np.array(self.intrinsics, dtype=np.float64).reshape(3, 3)
         dist_coeffs = np.zeros(5)
 
@@ -124,7 +131,7 @@ class ArViewNode(VisionDemo):
         for tag_id, corners in found:
             for corner in corners:
                 cv2.circle(frame, (int(corner[0]), int(corner[1])), 2,
-                           (0, 255, 255), -1)
+                           CORNER, -1)
             pose = tags.solve_tag_pose(corners, camera_matrix, dist_coeffs,
                                        self.tag_size)
             if pose is None:
@@ -136,8 +143,6 @@ class ArViewNode(VisionDemo):
                 draw_cube(frame, imgpts)
             else:
                 self._draw_model(frame, rvec, tvec, camera_matrix, dist_coeffs)
-        if not found:
-            banner(frame, 'NO TAG', color=(200, 200, 200))
         return frame
 
     def _draw_model(self, frame, rvec, tvec, camera_matrix, dist_coeffs):
