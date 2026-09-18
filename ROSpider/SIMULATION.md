@@ -401,7 +401,7 @@ ros2 launch rospider_gazebo pick_place.launch.py scene:=false tune:=true arm_pos
 | ส่วน | มีอะไร |
 |---|---|
 | ภาพซ้าย | overlay กล้องพร้อมกรอบและแกนของป้ายที่เห็น |
-| **Tags** | แถวละหนึ่ง id: `action` (`none`/`approach`/`place`/`stop`) และ `standoff` (เมตร) แถวมาจาก `behaviors:` ใน YAML บวก id ที่เพิ่งเห็นจะโผล่มาเอง (ตั้งต้นที่ `none`) หรือพิมพ์เลขที่ช่อง **add id** แล้วกดปุ่ม |
+| **Tags** | แถวละหนึ่ง id: `action` (`none`/`approach`/`place`/`stop`), `standoff` (เมตร) และ `cube` (ลูกไหนควรมาวางที่ป้ายนี้ — โหนดนี้ไม่ได้ใช้เอง เป็นคำตอบให้ mini game อ่าน หัวข้อ 10; ตัวเลือกมาจาก `cube_choices`) แถวมาจาก `behaviors:` ใน YAML บวก id ที่เพิ่งเห็นจะโผล่มาเอง (ตั้งต้นที่ `none`) หรือพิมพ์เลขที่ช่อง **add id** แล้วกดปุ่ม |
 | checkbox **Enable behaviors** | เปิด/ปิดพฤติกรรมทั้งหมด |
 | บรรทัด status | ข้อความจาก `TagBehavior` (เช่น `tag 0: reached`) ต่อด้วยคำตอบล่าสุดของ `/pick_and_place/place` |
 | ปุ่มล่าง | **Save** เซฟลง `~/.ros/apriltag_tuned.json` (เปลี่ยนที่เก็บด้วยพารามิเตอร์ `tuned_path`), **Revert** กลับไปค่าใน `config/apriltag.yaml`, **Print YAML** พิมพ์ค่าปัจจุบันเป็นบล็อก YAML ลง terminal เอาไปวางในไฟล์ได้เลย |
@@ -664,33 +664,50 @@ python3 tools/train_yolo.py --data ~/datasets/cubes --name cubes
 
 ## 10. Mini game (หยิบ → ขนผ่านสนาม → วางตามป้าย)
 
-เกมสำหรับช่วงบ่ายของเวิร์กช็อป: หุ่นเริ่มที่ต้นโถง หยิบลูกบาศก์สีพาสเทล 3 ลูก ขนผ่านสนามรูปตัว S ไปวางบนสถานีปลายทางที่มีป้าย AprilTag ซึ่งสถานีไหนรับสีไหน**สุ่มทุกรอบ** — หุ่นต้องอ่านเอง
+เกมสำหรับช่วงบ่ายของเวิร์กช็อป: หุ่นเริ่มที่ต้นโถง หยิบลูกบาศก์สีพาสเทล 3 ลูก ขนผ่านสนามรูปตัว S ไปวางบนสถานีปลายทางที่มีป้าย AprilTag ซึ่งสถานีไหนรับสีไหน**สุ่มทุกรอบ** (`seed`) **ไม่มีอะไรเตรียมไว้ให้ทีม** — ทีมต้องทำเอง 3 อย่างตามลำดับที่เรียนมาตอนเช้า:
+
+1. **ทำแผนที่ (SLAM)** — ขับหุ่นสำรวจสนามแล้วเซฟแผนที่
+2. **จูน detector** — ช่วงสี LAB ในหน้าต่าง LAB_Tool (ทีมสี) หรือถ่ายภาพ+เทรน (ทีม YOLO)
+3. **จูน AprilTag** — บอกหุ่นว่าป้ายไหนวางลูกสีอะไร ที่ระยะเท่าไร
 
 ```bash
-ros2 launch rospider_gazebo mini_game.launch.py detector:=color seed:=3
+# 1) SLAM: สนามเดิม ของครบ แต่ใช้ slam_toolbox แทน Nav2 — ขับเองด้วยคีย์บอร์ด
+ros2 launch rospider_gazebo mini_game.launch.py slam:=true tune:=true seed:=3
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/controller/cmd_vel
+```
+
+ระหว่างขับ หน้าต่าง AprilTag (`tune:=true`) เปิดอยู่ ขับไปหน้าสถานีแต่ละจุด ป้ายจะโผล่ในตารางเอง ดูสีแผ่นเหนือป้ายในภาพกล้อง แล้วตั้ง **action = `place`, standoff (0.30), cube = สีนั้น** → **Save** (ข้อ 3 ทำพร้อมข้อ 1 ได้เลย) เมื่อขับครบสนามแล้วเซฟแผนที่:
+
+```bash
+ros2 run nav2_map_server map_saver_cli -f ~/arena3 --ros-args -p use_sim_time:=true -p save_map_timeout:=10.0
+```
+
+(`save_map_timeout` เพราะ slam_toolbox ส่ง `/map` แค่ 0.5 Hz ค่าเริ่มต้น 2 วิ บางทีรอไม่ทันแล้วขึ้น `failed`)
+
+```bash
+# 2)+เล่น: ทีมสีเปิดพร้อมหน้าต่างจูน (จูนได้ระหว่างเกม) ทีม YOLO ดู "ทีม YOLO" ด้านล่าง
+ros2 launch rospider_gazebo mini_game.launch.py map:=~/arena3.yaml detector:=color seed:=3 tune:=true
 ```
 
 | arg | ค่า | ความหมาย |
 |---|---|---|
+| `slam` | `false` | `true` = รอบทำแผนที่ (slam_toolbox + RViz แผนที่ ไม่มี Nav2/ภารกิจ) |
+| `map` | — | **ต้องใส่**ตอนเล่น: `.yaml` ที่เซฟจากรอบ `slam:=true` (ไม่ใส่ launch จะบอกให้ไปทำแผนที่ก่อน) |
 | `detector` | `color` / `yolo` | ใครเป็นคนตรวจจับลูกบาศก์ |
 | `color_config` | `color_detect_arena.yaml` | ช่วง LAB เริ่มต้น (ตั้งใจให้**ยังจับไม่ได้** ทีมต้องจูน) — `color_detect_arena_solved.yaml` คือเฉลยของวิทยากร |
 | `model` | `models/yolo/cubes.pt` | โมเดล YOLO — ตัวที่แจกมารู้จักแค่ลูกบาศก์ RGB ทีม YOLO ต้องเทรนใหม่ (ดูด้านล่าง) |
-| `seed` | `0` | สุ่มว่าสถานีไหนได้สีอะไร |
+| `seed` | `0` | สุ่มว่าสถานีไหนได้สีอะไร — **รอบ SLAM กับรอบเล่นต้องใช้ seed เดียวกัน** |
 | `mission` | `basic` | ไฟล์ภารกิจใน `config/missions/` |
 | `auto_start` | `true` | `false` = รอ `ros2 service call /mission/start std_srvs/srv/Trigger` |
-| `tune`, `rviz`, `gui` | | เหมือน launch อื่น — `tune:=true` เปิดหน้าต่างของ detector และ AprilTag; ไฟล์ที่เซฟจากในเกมแยกจากช่วงสาธิตตอนเช้า (`~/.ros/*_game_tuned.json`, `color_detect_arena_tuned.json`) |
+| `tune`, `rviz`, `gui` | | เหมือน launch อื่น — `tune:=true` เปิดหน้าต่างของ detector และ AprilTag; ไฟล์ที่เซฟจากในเกมแยกจากช่วงสาธิตตอนเช้า (`~/.ros/apriltag_game_tuned.json`, `yolo_detect_game_tuned.json`, `color_detect_arena_tuned.json`) |
+
+เฉลยของวิทยากร: `maps/arena.yaml` (แผนที่), `config/color_detect_arena_solved.yaml`, `models/yolo/pastel.pt` และตาราง `tag N = สี` ที่ launch พิมพ์บรรทัดแรก
 
 ### สนาม `worlds/arena.sdf`
 
-โถง 6 × 2 ม. ทางเดินเป็นตัว S: แผงเฉียงหลังจุดเริ่ม → ผนังกั้น A จากด้านเหนือ (ช่อง 0.8 ม. ทางใต้) → ลังในมุมห้องกลาง → ผนังกั้น B จากด้านใต้ (ช่อง 0.8 ม. ทางเหนือ) → จุดสำรวจ (3.0, 0.3) → กล่องด้านใต้ → เสาสองต้น → สถานี 3 จุดเรียงบนผนังท้ายที่ x 5.1 ไฟล์ world เป็นโถงเปล่า **ของในเกมทั้งหมด spawn จาก launch** (แท่น ลูกบาศก์ สถานี) จึงทำแผนที่ได้ด้วย SLAM/V-SLAM ปกติ: `slam.launch.py world:=<path>/arena.sdf` แล้ว `map_saver`
+โถง 6 × 2 ม. ทางเดินเป็นตัว S: แผงเฉียงหลังจุดเริ่ม → ผนังกั้น A จากด้านเหนือ (ช่อง 0.8 ม. ทางใต้) → ลังในมุมห้องกลาง → ผนังกั้น B จากด้านใต้ (ช่อง 0.8 ม. ทางเหนือ) → จุดสำรวจ (3.0, 0.3) → กล่องด้านใต้ → เสาสองต้น → สถานี 3 จุดเรียงบนผนังท้ายที่ x 5.1 ไฟล์ world เป็นโถงเปล่า **ของในเกมทั้งหมด spawn จาก launch** (แท่น ลูกบาศก์ สถานี) รอบ `slam:=true` กับรอบเล่นจึงเห็นสนามเดียวกันเป๊ะ (ถ้า seed เดียวกัน) ทำแผนที่ด้วย V-SLAM ก็ได้: `vslam.launch.py world:=<path>/arena.sdf` แต่จะไม่มีสถานี ต้องไปดูสีป้ายในรอบเล่นแทน
 
-แผนที่ที่ทำไว้ให้อยู่ที่ `maps/arena.yaml` (ผนังและเสาแต่งด้วยมือให้ทึบ) **ทีมทำแผนที่เองได้** ด้วย SLAM หรือ V-SLAM แล้วส่ง `map:=<ไฟล์ .yaml ของทีม>` — launch จะ**วาดแท่นหยิบของลงในแผนที่ให้เอง**ตอนเปิด (แท่นสูง 8 ซม. ต่ำกว่าระนาบสแกน 15 ซม. LiDAR จึงไม่เคยเห็น ถ้าไม่วาด Nav2 จะขับชนแล้วหุ่นหงาย) ไม่ต้องแก้ไฟล์แผนที่ด้วยมือ:
-
-```bash
-ros2 launch rospider_gazebo slam.launch.py world:=$PWD/src/simulations/rospider_gazebo/worlds/arena.sdf   # หรือ vslam.launch.py
-ros2 run nav2_map_server map_saver_cli -f ~/my_arena --ros-args -p use_sim_time:=true
-ros2 launch rospider_gazebo mini_game.launch.py map:=~/my_arena.yaml
-```
+แผนที่ที่ส่งด้วย `map:=` จะถูก**วาดแท่นหยิบของลงไปให้เอง**ตอนเปิด (แท่นสูง 8 ซม. ต่ำกว่าระนาบสแกน 15 ซม. LiDAR จึงไม่เคยเห็น ถ้าไม่วาด Nav2 จะขับชนแล้วหุ่นหงาย) ไม่ต้องแก้ไฟล์แผนที่ด้วยมือ ผนังโปร่ง ๆ จาก SLAM ที่ขับสั้นไป Nav2 ยังใช้ได้เพราะ local costmap เห็น LiDAR สด
 
 **Nav2 ในสนามนี้ต่างจากห้องเดโม** (ทับใน launch ไม่ได้แก้ `nav2_params.yaml`): controller เป็น **Regulated Pure Pursuit** แทน DWB — DWB ในช่อง 0.8 ม. หา trajectory ไม่ได้เลย นั่งหมุน/ถอยจนหมดเวลา (วัด: 600 วิ ได้ 2.3 ม.), `robot_radius` 0.15 (ครึ่งแนวทแยงของกล่อง skid; 0.10 มุมกล่องเกี่ยวปลายผนังแล้วหงาย), `inflation_radius` 0.18, ความเร็ว 0.15 m/s (เดินจริง ~0.10), goal tolerance 0.15 ม., และ **static layer ใน local costmap** เพื่อให้เห็นแท่นที่วาดในแผนที่
 
@@ -700,32 +717,34 @@ ros2 launch rospider_gazebo mini_game.launch.py map:=~/my_arena.yaml
 
 ### ภารกิจ = บล็อกใน YAML
 
-`config/missions/basic.yaml` คือสิ่งที่ทีมแก้: ลำดับบล็อก, waypoint, `standoff`, ชื่อสี
+`config/missions/basic.yaml` คือสิ่งที่ทีมแก้: ลำดับบล็อก, waypoint, ชื่อสี
 
 ```yaml
 steps:
-  - survey: survey          # ไปจุดสำรวจ หันซ้าย-กลาง-ขวา อ่านป้าย + แผ่นสี → ตาราง "ป้ายไหน = สีอะไร"
+  - survey: survey          # ไปจุดสำรวจ หันซ้าย-กลาง-ขวา ให้ apriltag_detect เห็นและจำป้ายทุกใบ
   - goto: pick_table
   - pick: pink              # คืบไปจุด dock ที่แน่นอน (pick_table + dock), /pick_and_place/pick
                             # รอจน CARRY แล้วถอยกลับ pick_table
-  - deliver: by_marker      # Nav2 ไปหน้าสถานีที่แผ่นสีตรงกับลูกที่ถือ (ตำแหน่งจากท่าป้ายที่จำไว้)
-                            # แล้ว apriltag_detect เดินเข้า standoff และเรียก ~/place ให้
+  - deliver: by_tag         # ป้ายที่ทีมตั้ง cube = pink ในหน้าต่าง AprilTag: Nav2 ไปหน้าป้ายนั้น
+                            # แล้วเปิดพฤติกรรม place ของทีม (standoff ตามที่ตั้ง) ให้เรียก ~/place
   - goto: home
 ```
 
+**`deliver` ไม่รู้อะไรเอง** — มันอ่านตารางป้ายจาก `apriltag_detect` (`config/apriltag.yaml` + `~/.ros/apriltag_game_tuned.json` ที่ทีม Save + ที่แก้สดในหน้าต่าง): ป้ายไหน `cube` ตรงกับลูกที่ถือ ต้องมี `action: place` และใช้ `standoff` ของป้ายนั้น ถ้าไม่มีป้ายไหนตั้งสีนั้น หรือป้ายยังเป็น `none` บล็อกล้มทันทีพร้อมบอกว่าขาดอะไร (`no tag has cube 'pink' ...`, `tag 1 is set to 'none' ...`) ตั้งสีผิดป้าย = หุ่นเอาไปวางผิดสถานีจริง ๆ (3 คะแนนแทน 10) `deliver: 1` ข้ามการหาสี ไปป้าย 1 เลย แต่ยังต้องเป็น `place`
+
 `pick` ที่ยังถือของอยู่ (เพราะ `deliver` ก่อนหน้าล้ม) จะวางลูกนั้นลงพื้นตรงนั้นก่อน (ไม่ได้คะแนน) แล้วทำต่อ ไม่ให้บล็อกที่เหลือล้มทั้งหมด
 
-บล็อกที่มี: `goto`, `survey`, `pick`, `deliver` (`by_marker` หรือเลขป้าย), `place: here`, `say` ไฟล์ที่เขียนผิดจะถูกปฏิเสธตอน launch พร้อมบอกว่าบล็อกไหนผิด `on_fail: skip | retry | stop` กำหนดว่าบล็อกล้มแล้วทำอะไร โหนด `mission` log ทุกบล็อกเป็น `[k/n] block ... ok/FAILED (t s)` และสรุปเวลาทั้งหมดใน `/mission/summary`
+บล็อกที่มี: `goto`, `survey`, `pick`, `deliver` (`by_tag` หรือเลขป้าย), `place: here`, `say` ไฟล์ที่เขียนผิดจะถูกปฏิเสธตอน launch พร้อมบอกว่าบล็อกไหนผิด `on_fail: skip | retry | stop` กำหนดว่าบล็อกล้มแล้วทำอะไร โหนด `mission` log ทุกบล็อกเป็น `[k/n] block ... ok/FAILED (t s)` และสรุปเวลาทั้งหมดใน `/mission/summary`
 
-**ทำไมต้องสำรวจก่อน:** ตอนถือของกล้องถูกลูกบาศก์บัง (หัวข้อ 8) หุ่นจึงต้องเห็นป้ายทุกใบ*ก่อน*หยิบ สีของแผ่นป้ายโหนด `mission` แยกสีเอง (`mission_plan.marker_boxes`, ช่วง HSV คงที่ในโค้ด เพราะแผ่นเรืองแสงสีคงที่) — **ไม่ได้ใช้ detector ของทีม** ทีม YOLO ที่เทรนแต่ลูกบาศก์จึงไม่ถูกหักคะแนนตอนสำรวจ; detector ของทีมมีผลตอนหยิบเท่านั้น จุด `survey` (3.0, 0) มองเห็นสถานีทั้งสามพร้อมกันในเฟรมเดียว ท่าป้ายถูกจำไว้เป็น TF `tag_<id>_remembered` แล้ว `deliver` คำนวณเป้าหมาย Nav2 จากมัน (ถอยจากป้ายมา `standoff` + 0.3 ม. หันหน้าเข้าป้าย) ทีมจึง**ไม่ต้องปักพิกัดสถานีเอง**
+**ทำไมต้องสำรวจก่อน:** ตอนถือของกล้องถูกลูกบาศก์บัง (หัวข้อ 8) หุ่นจึงต้องเห็นป้ายทุกใบ*ก่อน*หยิบ จุด `survey` (3.0, 0.3) มองเห็นสถานีทั้งสามพร้อมกันในเฟรมเดียว ท่าป้ายถูกจำไว้เป็น TF `tag_<id>_remembered` แล้ว `deliver` คำนวณเป้าหมาย Nav2 จากมัน (ถอยจากป้ายมา `standoff` + 0.3 ม. หันหน้าเข้าป้าย) ทีมจึง**ไม่ต้องปักพิกัดสถานีเอง** แผ่นสีเหนือป้ายมีไว้ให้*คน*ดู (ในภาพกล้องตอน SLAM หรือใน Gazebo) ไม่ใช่ให้โค้ดอ่าน
 
 ### ทีม YOLO
 
 ```bash
-ros2 launch rospider_gazebo mini_game.launch.py auto_start:=false arm_pose:=init      # กล้องก้มมองแท่น
+ros2 launch rospider_gazebo mini_game.launch.py slam:=true arm_pose:=init      # กล้องก้มมองแท่น ไม่ต้องมีแผนที่
 python3 tools/capture_dataset.py --objects pastel --world arena --dock 0.5 --samples 20 --out ~/datasets/pastel
 python3 tools/train_yolo.py --data ~/datasets/pastel --name pastel        # ~1 นาทีบน GPU
-ros2 launch rospider_gazebo mini_game.launch.py detector:=yolo model:=models/yolo/pastel.pt
+ros2 launch rospider_gazebo mini_game.launch.py map:=~/arena3.yaml detector:=yolo model:=models/yolo/pastel.pt
 ```
 
 `--dock 0.5` ให้เครื่องมือเดินหน้าจากจุด spawn ไปยืนที่เดียวกับที่ mission หยิบ (ห่างลูกบาศก์ 0.235 ม.) ก่อนเก็บภาพ และถอยกลับเมื่อเสร็จ
@@ -746,6 +765,7 @@ python3 tools/score.py --seed 3        # seed เดียวกับที่ 
 
 | ช่วง | เวลา |
 |---|---|
+| ทำแผนที่เอง (ขับไป-กลับ 5 ม. ที่ 0.1 m/s + ตั้งป้ายในหน้าต่าง) | ~5 นาที |
 | สำรวจ (เดิน 3.8 ม. ผ่านตัว S + หันดู 3 มุม) | ~100 วิ |
 | กลับมาแท่นหยิบ | 115–175 วิ |
 | dock + หยิบ + ถอย | 55–80 วิ |
