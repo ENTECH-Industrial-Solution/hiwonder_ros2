@@ -117,8 +117,15 @@ line_following:
 
 track_and_grab:
   ros__parameters:
+    # The block colours the control window offers; each must be one of
+    # pick_place.yaml's `colors` and the detector's classes.
+    colors: ['red', 'green', 'blue']
+    # Nothing happens until a colour is chosen -- in the control window
+    # (gui: true) or with `ros2 service call /track_and_grab/pick`. start:
+    # true tracks `color` from the moment the window opens instead.
+    gui: true
+    start: false
     color: red
-    start: true
     pan_gain: 0.055
     tilt_gain: 0.05
     # "x y z" in base_footprint metres, where the grabbed block is put down:

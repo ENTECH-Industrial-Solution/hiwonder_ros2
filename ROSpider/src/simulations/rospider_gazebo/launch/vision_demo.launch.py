@@ -71,7 +71,7 @@ OVERRIDES = (
     'steer_tolerance', 'forward_speed', 'turn_speed', 'max_hands',
     'detection_confidence', 'tracking_confidence', 'pan_gain', 'tilt_gain',
     'flip', 'start', 'place_point', 'threshold', 'pick_repeat',
-    'stop_threshold', 'scan_topic',
+    'stop_threshold', 'scan_topic', 'gui',
 )
 
 WEBCAM_TOPIC = '/webcam/image_raw'

@@ -190,11 +190,16 @@ class ServoClient:
     def _publish(self, publisher, names, positions, duration):
         # The first command usually goes out before the controller has
         # matched the publisher, and a message with no subscriber is lost;
-        # a demo's start pose then never happens. Give it a moment.
-        for _ in range(20):
+        # a demo's start pose then never happens. Give it a moment: with
+        # the whole sim up, discovery has been measured at 2 s and more.
+        for _ in range(100):
             if publisher.get_subscription_count() > 0:
                 break
             time.sleep(0.1)
+        else:
+            self.node.get_logger().warn(
+                f'{publisher.topic_name} has no subscriber after 10 s; '
+                'sending anyway')
         point = JointTrajectoryPoint()
         point.positions = positions
         point.time_from_start.sec = int(duration)
@@ -325,6 +330,10 @@ class VisionDemo(Node):
         """Handle a key press. Return True if it was handled."""
         return False
 
+    def on_tick(self):
+        """Called once per loop pass on the main thread, frame or no frame:
+        for a demo's own Tk window, which must be pumped from here."""
+
     def on_mouse(self, event, x, y):
         """Handle a mouse event in the window; (x, y) are frame pixels."""
 
@@ -341,6 +350,7 @@ class VisionDemo(Node):
             f'"{self.window}" window to quit')
         mouse_hooked = False
         while self.running and rclpy.ok():
+            self.on_tick()
             try:
                 frame = self._frames.get(timeout=1.0)
             except queue.Empty:

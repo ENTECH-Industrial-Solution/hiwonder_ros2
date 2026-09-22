@@ -25,7 +25,10 @@ def generate_launch_description():
         launch_arguments={'auto_start': 'false'}.items())
     window = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(launch_dir, 'vision_demo.launch.py')),
-        launch_arguments={'demo': 'track_and_grab'}.items())
+        # detector:=none, explicitly: pick_place.launch.py's `detector`
+        # argument (color) would otherwise leak into the include and start
+        # a second color_detect on the same topics.
+        launch_arguments={'demo': 'track_and_grab', 'detector': 'none'}.items())
     # The window waits for the spawn burst, as the other demos do when they
     # follow gazebo.launch.py from a second terminal.
     return LaunchDescription([scene, TimerAction(period=8.0, actions=[window])])

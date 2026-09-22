@@ -23,32 +23,49 @@ Two parts are the simulation's own:
     Tracking pauses while pick_and_place reports it is busy and resumes
     when it is done.
 
+One more is the workshop's: upstream tracks its one colour from the moment
+it starts, this node waits to be told. It opens idle, the camera level and
+nothing followed, until a colour is chosen -- a button in the small Tk
+control window next to the depth one (gui:=true, the default; one button
+per colour of `colors`, Stop, and a status line), or
+`ros2 service call /track_and_grab/pick interfaces/srv/SetString
+"{data: red}"`. One order is one job: follow, settle, pick, put down, and
+back to idle for the next. ~/set_running false (or Stop) drops the job.
+start:=true tracks `color` from the start, as upstream does.
+
 launch/track_and_grab.launch.py starts the whole thing, as upstream's does:
 the simulator with the blocks, the colour detector, pick_and_place (with
 auto_start:=false, so it waits for this node) and this window.
 
-    ros2 launch rospider_gazebo track_and_grab.launch.py color:=red
+    ros2 launch rospider_gazebo track_and_grab.launch.py
 """
 
 import time
+import tkinter as tk
 
 import cv2
 import numpy as np
 from interfaces.msg import ObjectsInfo
 from interfaces.srv import SetString
 from rclpy.qos import DurabilityPolicy, QoSProfile
-from rospider_gazebo import vision_demo
+from rospider_gazebo import tkview, vision_demo
 from rospider_gazebo.detections import box_centroid
 from rospider_gazebo.pid import PID, set_range
 from rospider_gazebo.vision_demo import VisionDemo, depth_color_map
 from std_msgs.msg import String
+from std_srvs.srv import SetBool
 
-#: Start pose, servo ids 19-24: the camera-levelling arm shape, as in
-#: scripts/face_track.py and scripts/color_track.py.
-LEVEL_POSE = ((19, 500), (20, 650), (21, 40), (22, 432), (23, 500), (24, 500))
+#: Start pose, servo ids 19-24: scripts/color_track.py's camera-levelling
+#: shape, but with the wrist (servo 22) at the robot's `init` tilt, 52 deg
+#: down. Upstream's block sits on a table at camera height; the sim's sit
+#: on the 8 cm pedestal 0.235 m ahead, 43 deg below a level camera and out
+#: of its tilt travel. From `init` they show at the bottom of the frame and
+#: the tilt loop brings them to the centre (about pick_and_place's look
+#: pose, servo 22 at 130).
+LEVEL_POSE = ((19, 500), (20, 650), (21, 40), (22, 215), (23, 500), (24, 500))
 
 PAN_PULSE = (0, 1000)       # servo 19 travel, upstream's yaw limits
-TILT_PULSE = (332, 532)     # servo 22 travel, +/- 100 counts (~24 deg)
+TILT_PULSE = (115, 315)     # servo 22 travel, +/- 100 counts (~24 deg)
 
 #: Hiwonder's circle colours (driver/sdk/sdk/common.py range_rgb), BGR; a
 #: colour not in the table draws grey, as upstream's 0x55 fallback.
@@ -72,6 +89,11 @@ CARRY_STATE = 'CARRY'
 PLACE_POINT = '0.02 0.16 0.035'
 
 
+def tk_colour(bgr):
+    """A BGR tuple as the '#rrggbb' Tk wants."""
+    return '#%02x%02x%02x' % (bgr[2], bgr[1], bgr[0])
+
+
 class TrackAndGrabNode(VisionDemo):
 
     window = 'depth'
@@ -79,7 +101,11 @@ class TrackAndGrabNode(VisionDemo):
     def __init__(self):
         super().__init__('track_and_grab', depth=True, servos=True)
         self.color = str(self.param('color', 'red'))
-        self.tracking = bool(self.param('start', True))
+        self.colors = [str(c) for c in self.param('colors', ['red', 'green', 'blue'])]
+        self.tracking = bool(self.param('start', False))
+        self.gui = bool(self.param('gui', True)) and self.show
+        self.root = None            # the Tk control window, once open
+        self.status = None
         self.pan = float(self.param('pan_pulse', 500))
         self.tilt = float(self.param('tilt_pulse', LEVEL_POSE[3][1]))
         self.pid_pan = PID(float(self.param('pan_gain', 0.055)), 0.0, 0.0)
@@ -97,11 +123,114 @@ class TrackAndGrabNode(VisionDemo):
         self.create_subscription(
             String, '/pick_and_place/state', self.state_callback,
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.create_service(SetString, '~/pick', self.pick_callback)
+        self.create_service(SetBool, '~/set_running', self.set_running_callback)
 
     def on_start(self):
         self.servos.set_servo_position(1.5, LEVEL_POSE)
-        self.get_logger().info(
-            f'tracking {self.color}; the pick goes through /pick_and_place/pick')
+        if self.gui:
+            self._open_panel()
+        if self.tracking:
+            self.get_logger().info(f'tracking {self.color}')
+        else:
+            self.get_logger().info(
+                'idle: pick a colour in the control window or call ~/pick')
+
+    # -------------------------------------------------------------- orders
+
+    def start_job(self, color):
+        """Follow `color`, pick it and put it down, then go idle again."""
+        if color not in self.colors:
+            return f'{color!r} is not one of {self.colors}'
+        if self.pick_state not in FREE_STATES:
+            return f'busy: pick_and_place is in {self.pick_state}'
+        self.color = color
+        self.target = None
+        self.tracking = True
+        self.pid_pan.clear()
+        self.pid_tilt.clear()
+        self.still_since = time.monotonic()
+        self.get_logger().info(f'tracking {color}')
+        return ''
+
+    def stop_job(self):
+        """Drop the current order; the camera goes back to level -- unless
+        pick_and_place has the arm, which cannot be called off: moving the
+        camera under its LOOK would only make it miss the block."""
+        self.tracking = False
+        self.pid_pan.clear()
+        self.pid_tilt.clear()
+        self.pan, self.tilt = 500.0, float(LEVEL_POSE[3][1])
+        if self.pick_state in FREE_STATES:
+            self.servos.set_servo_position(1.5, LEVEL_POSE)
+            self.get_logger().info('idle')
+        else:
+            self.get_logger().info(
+                f'order dropped; pick_and_place is still in {self.pick_state}')
+
+    def status_text(self):
+        if self.pick_state not in FREE_STATES:
+            return f'{self.pick_state.lower()} {self.color}'
+        if self.tracking:
+            return f'tracking {self.color}'
+        return 'idle -- pick a colour'
+
+    def pick_callback(self, request, response):
+        error = self.start_job(request.data or self.colors[0])
+        response.success = not error
+        response.message = error or f'tracking {self.color}'
+        return response
+
+    def set_running_callback(self, request, response):
+        if request.data:
+            error = self.start_job(self.color)
+        else:
+            error = ''
+            self.stop_job()
+        response.success = not error
+        response.message = error or self.status_text()
+        return response
+
+    # --------------------------------------------------------------- panel
+
+    def _open_panel(self):
+        """The control window: a button per colour, Stop, a status line.
+        Pumped by on_tick(), since highgui holds the main thread's loop."""
+        root = tk.Tk()
+        root.title('track_and_grab')
+        root.resizable(False, False)
+        row = tk.Frame(root)
+        row.pack(padx=8, pady=(8, 4))
+        for color in self.colors:
+            tkview.flat_button(
+                row, color, 80, 32, bg=tk_colour(RANGE_RGB.get(color, GREY)),
+                command=lambda c=color: self._log_refusal(self.start_job(c))
+            ).pack(side='left', padx=2)
+        tkview.flat_button(row, 'Stop', 80, 32, bg=tkview.GREY_BUTTON,
+                           command=self.stop_job).pack(side='left', padx=(10, 2))
+        self.status = tk.StringVar(value=self.status_text())
+        tk.Label(root, textvariable=self.status, anchor='w').pack(
+            fill='x', padx=8, pady=(0, 8))
+        root.protocol('WM_DELETE_WINDOW', self._close_panel)
+        self.root = root
+
+    def _log_refusal(self, error):
+        if error:
+            self.get_logger().warn(error)
+
+    def _close_panel(self):
+        if self.root is not None:
+            self.root.destroy()
+            self.root = None
+
+    def on_tick(self):
+        if self.root is None:
+            return
+        self.status.set(self.status_text())
+        try:
+            self.root.update()
+        except tk.TclError:
+            self.root = None
 
     # ----------------------------------------------------------- callbacks
 
@@ -125,10 +254,12 @@ class TrackAndGrabNode(VisionDemo):
             future = self.place_client.call_async(
                 SetString.Request(data=self.place_point))
             future.add_done_callback(self._placed)
-        elif message.data in FREE_STATES and self.pick_state not in FREE_STATES:
-            # The pick left the arm at its own pose; go back to tracking's.
-            self.servos.set_servo_position(1.5, LEVEL_POSE)
+        was_busy = self.pick_state not in FREE_STATES
         self.pick_state = message.data
+        if was_busy and message.data in FREE_STATES:
+            # Picked and put down (or given up): the job is over. The pick
+            # left the arm at its own pose; stop_job() levels it again.
+            self.stop_job()
 
     def _placed(self, future):
         response = future.result()
@@ -204,6 +335,7 @@ class TrackAndGrabNode(VisionDemo):
         self.pid_tilt.clear()
 
     def on_stop(self):
+        self._close_panel()
         self.servos.set_servo_position(1.5, LEVEL_POSE)
 
 
