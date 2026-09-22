@@ -325,6 +325,9 @@ class VisionDemo(Node):
         """Handle a key press. Return True if it was handled."""
         return False
 
+    def on_mouse(self, event, x, y):
+        """Handle a mouse event in the window; (x, y) are frame pixels."""
+
     def on_stop(self):
         """Called once the window closes, before the node is destroyed."""
 
@@ -336,6 +339,7 @@ class VisionDemo(Node):
         self.get_logger().info(
             f'reading {self.image_topic}; press q or Esc in the '
             f'"{self.window}" window to quit')
+        mouse_hooked = False
         while self.running and rclpy.ok():
             try:
                 frame = self._frames.get(timeout=1.0)
@@ -355,6 +359,12 @@ class VisionDemo(Node):
             if not self.show:
                 continue
             cv2.imshow(self.window, result)
+            if not mouse_hooked:
+                # The window exists only after the first imshow.
+                cv2.setMouseCallback(
+                    self.window,
+                    lambda event, x, y, _flags, _param: self.on_mouse(event, x, y))
+                mouse_hooked = True
             key = cv2.waitKey(1)
             if key == -1:
                 continue

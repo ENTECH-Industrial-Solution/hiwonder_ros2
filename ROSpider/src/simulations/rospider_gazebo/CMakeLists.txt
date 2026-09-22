@@ -21,6 +21,7 @@ install(PROGRAMS scripts/color_position.py scripts/color_recognition.py
                  scripts/finger_trajectory.py scripts/face_track.py
                  scripts/pose_control.py scripts/webcam_publisher.py
                  scripts/color_track.py scripts/track_and_grab.py
+                 scripts/object_tracking.py
   DESTINATION lib/${PROJECT_NAME})
 
 # rospider_gazebo.maps: map name -> <workspace>/maps path, used by the launch files
@@ -57,6 +58,8 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_detections test/test_detections.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_mission_plan test/test_mission_plan.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_color_picker test/test_color_picker.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 

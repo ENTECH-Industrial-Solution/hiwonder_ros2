@@ -42,6 +42,7 @@ DEMOS = {
     'color_position': 'color',
     'color_recognition': 'color',
     'color_track': 'color',
+    'object_tracking': None,
     'track_and_grab': None,
     'apriltag_position': 'apriltag',
     'apriltag_track': 'apriltag',
@@ -68,7 +69,7 @@ OVERRIDES = (
     'model_yaw_deg', 'tag_size', 'debug', 'plane_distance', 'edge_tolerance',
     'steer_tolerance', 'forward_speed', 'turn_speed', 'max_hands',
     'detection_confidence', 'tracking_confidence', 'pan_gain', 'tilt_gain',
-    'flip', 'start', 'place_point',
+    'flip', 'start', 'place_point', 'threshold', 'pick_repeat',
 )
 
 WEBCAM_TOPIC = '/webcam/image_raw'

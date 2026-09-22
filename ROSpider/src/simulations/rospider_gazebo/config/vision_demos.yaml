@@ -101,6 +101,12 @@ color_track:
     pan_gain: 0.055          # pulses per pixel of horizontal error
     tilt_gain: 0.05          # pulses per pixel of vertical error
 
+object_tracking:
+  ros__parameters:
+    threshold: 0.5           # LAB band half-width: 50*threshold on a/b, twice on L
+    start: true              # false: wait for ~/set_running true, as upstream
+    pick_repeat: 10          # frames a click's colour is averaged over
+
 track_and_grab:
   ros__parameters:
     color: red
