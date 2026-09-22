@@ -107,6 +107,14 @@ object_tracking:
     start: true              # false: wait for ~/set_running true, as upstream
     pick_repeat: 10          # frames a click's colour is averaged over
 
+line_following:
+  ros__parameters:
+    threshold: 0.5           # LAB band half-width: 50*threshold on a/b, twice on L
+    start: true              # false: wait for ~/set_running true, as upstream
+    pick_repeat: 10          # frames a click's colour is averaged over
+    stop_threshold: 0.4      # metres: hold while the LiDAR sees anything nearer ahead
+    scan_topic: /scan
+
 track_and_grab:
   ros__parameters:
     color: red

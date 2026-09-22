@@ -807,6 +807,7 @@ ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
 | 6.4 | `ros2 launch example ar.launch.py` | `ros2 launch rospider_gazebo ar.launch.py` |
 | 6.5 | `ros2 launch example color_position.launch.py color:=red` | `ros2 launch rospider_gazebo color_position.launch.py color:=red` |
 | 6.6 | `ros2 service call /object_tracking/enter ...` แล้วคลิกวัตถุ, `set_running true` | `ros2 launch rospider_gazebo object_tracking.launch.py` แล้ว**คลิกซ้าย**ที่วัตถุในหน้าต่าง `image` ได้เลย (เริ่ม track ทันที ไม่ต้อง `set_running`; service ชื่อเดิมทั้งหมดยังเรียกได้ตามคู่มือ) |
+| 6.9 | `ros2 service call /line_following/enter ...` แล้วคลิกเส้น, `set_running true` | `ros2 launch rospider_gazebo line_following.launch.py` (เปิด Gazebo ด้วย `worlds/line_track.sdf` = ห้องเปล่ามีเส้นดำวนเป็นลูปบนพื้น หุ่นเกิดบนเส้นพอดี) แล้ว**คลิกซ้าย**ที่เส้นในหน้าต่าง `image` หุ่นเดินตามเส้นทันที; LiDAR เห็นอะไรใกล้กว่า 0.4 m ข้างหน้าจะหยุดรอ; service ชื่อเดิมยังเรียกได้ตามคู่มือ |
 | 6.7 | `ros2 launch example apriltag_position.launch.py` | `ros2 launch rospider_gazebo apriltag_position.launch.py` |
 | 6.8 | `ros2 launch example apriltag_track.launch.py` | `ros2 launch rospider_gazebo apriltag_track.launch.py` |
 | 6.10 | `ros2 launch example kcf.launch.py` | `ros2 launch rospider_gazebo kcf.launch.py` |
@@ -815,7 +816,7 @@ ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
 | RGB-D | `ros2 launch example prevent_falling.launch.py` / `cross_bridge` / `object_volume_measurement` / `object_classification` | ชื่อเดียวกันใน `rospider_gazebo` |
 | 7.3.2–7.3.6 | `ros2 launch example finger_trajectory.launch.py` / `hand_detect` / `hand_gesture` / `face_track` / `pose_control` | ชื่อเดียวกันใน `rospider_gazebo` — ค่าเริ่มต้นเป็น `source:=webcam` เพราะในโลก sim ไม่มีคน |
 
-ที่ไม่มี: 6.9 `line_following`, 8.3 `intelligent_kick` เป็นโหนดใน package `app` ที่ยังไม่ได้ย้ายมา; 8.4 `automatic_pick` + `navigation_transport` มี mini game (ข้อ 10) ทำหน้าที่เดียวกันในชื่ออื่น; 8.1 เป็นโปรแกรมปรับ servo บน PC ต่อบอร์ดจริง; 8.8 ครึ่งที่หยิบแยกหมวดยังไม่มี
+ที่ไม่มี: 8.3 `intelligent_kick` เป็นโหนดใน package `app` ที่ยังไม่ได้ย้ายมา; 8.4 `automatic_pick` + `navigation_transport` มี mini game (ข้อ 10) ทำหน้าที่เดียวกันในชื่ออื่น; 8.1 เป็นโปรแกรมปรับ servo บน PC ต่อบอร์ดจริง; 8.8 ครึ่งที่หยิบแยกหมวดยังไม่มี
 
 ### มีเดโมอะไรบ้าง
 
@@ -828,6 +829,7 @@ ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
 | `ar_view` | `opencv_example/ar.py` | วาดลูกบาศก์ (หรือโมเดล `.obj`) ทับป้าย AprilTag | มีป้ายในโลก |
 | `kcf_track` | `opencv_example/kcf.py` | กด `s` ลากกรอบเลือกเป้าหมาย แล้วหุ่นหันตาม | — |
 | `object_tracking` | `app/object_tracking.py` | คลิกซ้ายที่วัตถุ → เก็บสี LAB ใต้เมาส์ 10 เฟรม (วงแหวนโตขึ้น) แล้ว**เดินตาม**ก้อนสีนั้นให้อยู่ที่จุดเหลือง (ระยะจาก y ในภาพ, เลี้ยวจาก x); `threshold:=` กว้าง/แคบของแถบสี | มีวัตถุสีในโลก (เช่น `pick_place.launch.py`) |
+| `line_following` | `app/line_following.py` | คลิกซ้ายที่เส้น → เก็บสี LAB ใต้เมาส์ 10 เฟรม แล้ว**เดินตามเส้น**: มองพื้น 3 แถบ (น้ำหนัก 0.7/0.2/0.1 แถบใกล้สุดมากสุด) หาก้อนสีนั้น → มุมเบี่ยง → PID → เลี้ยว ±0.35 rad/s เดิน 0.05 m/s; กรอบเหลือง + จุดแดงคือที่เจอเส้นในแต่ละแถบ; `stop_threshold:=` ระยะ LiDAR ที่หยุดรอ | เส้นบนพื้น (`line_following.launch.py` เปิดโลก `line_track.sdf` ให้) — วิ่งครบลูป ~135 วิ |
 | `color_track` | `color_track/color_track_node.py` | แขน (servo 19 หัน, 22 ก้ม/เงย) หันตามก้อนสีให้อยู่กลางภาพ; หน้าต่างคือภาพ `result` ของ detector | ตัวตรวจจับ (launch เปิดให้เอง) + มีก้อนสีในโลก |
 | `track_and_grab` | `rgbd_example/track_and_grab.py` | RGB \| depth, วงกลมรอบก้อน, `Dist: NNNmm`; หันตามก้อน พอนิ่ง 2 วิ สั่ง `pick_and_place` หยิบแล้ววางข้างลำตัว | `pick_place.launch.py` (launch ของมันเปิดให้เอง) |
 | `prevent_falling` | `rgbd_example/prevent_falling_node.py` | เดินหน้า เจอขอบโต๊ะ/ขั้นบันไดแล้วเลี้ยวหนี | กล้อง depth |
