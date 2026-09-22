@@ -150,3 +150,42 @@ class BridgePolicy:
         if all(self._off(d, self.steer_tolerance) for d in (left, center, right)):
             return 0.0, 0.0
         return linear, angular
+
+
+# ------------------------------------------------------------ pixel -> point
+
+def patch_depth(depth_image, u, v, window=5):
+    """The median depth in a `window` pixel square round (u, v), in the
+    image's own units, or None when no pixel there has a reading."""
+    u, v = int(u), int(v)
+    half = window // 2
+    depth = np.asarray(depth_image)
+    patch = depth[max(0, v - half):v + half + 1, max(0, u - half):u + half + 1]
+    patch = patch[np.isfinite(patch) & (patch > 0)]
+    if patch.size == 0:
+        return None
+    return float(np.median(patch))
+
+
+def camera_point(u, v, depth, intrinsics):
+    """Pixel (u, v) at `depth` metres as (x, y, z) in the optical frame.
+
+    `intrinsics` is CameraInfo.k, the 3x3 matrix row by row.
+    """
+    fx, fy = intrinsics[0], intrinsics[4]
+    cx, cy = intrinsics[2], intrinsics[5]
+    return np.array([(u - cx) * depth / fx, (v - cy) * depth / fy, depth])
+
+
+def quaternion_matrix(x, y, z, w):
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ])
+
+
+def transform_point(point, translation, rotation):
+    """`point` moved by a transform given as (x, y, z) and (x, y, z, w) --
+    the fields of a geometry_msgs Transform, kept ROS-free for the tests."""
+    return quaternion_matrix(*rotation) @ np.asarray(point, dtype=float) + np.asarray(translation, dtype=float)

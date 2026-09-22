@@ -303,12 +303,13 @@ class VisionDemo(Node):
 
     # ------------------------------------------------------------ robot
 
-    def drive(self, linear_x=0.0, angular_z=0.0):
+    def drive(self, linear_x=0.0, angular_z=0.0, linear_y=0.0):
         """Publish a body twist on /controller/cmd_vel."""
         if self.cmd_vel_pub is None:
             raise RuntimeError('this demo was built without cmd_vel=True')
         twist = Twist()
         twist.linear.x = float(linear_x)
+        twist.linear.y = float(linear_y)
         twist.angular.z = float(angular_z)
         self.cmd_vel_pub.publish(twist)
 

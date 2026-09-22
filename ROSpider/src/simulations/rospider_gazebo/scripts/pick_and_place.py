@@ -17,7 +17,7 @@ from interfaces.msg import ObjectsInfo
 from interfaces.srv import SetString
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
-from rospider_gazebo import arm_ik
+from rospider_gazebo import arm_ik, depth_probe
 from rospider_gazebo.detections import box_centroid
 from sensor_msgs.msg import CameraInfo, Image, JointState
 from std_msgs.msg import Empty, String
@@ -241,7 +241,7 @@ class PickAndPlaceNode(Node):
         self.depth_image = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
 
     def info_callback(self, msg):
-        self.intrinsics = (msg.k[0], msg.k[4], msg.k[2], msg.k[5])
+        self.intrinsics = list(msg.k)      # the 3x3 K, as depth_probe reads it
 
     def joint_callback(self, msg):
         self.joint_state.update(zip(msg.name, msg.position))
@@ -444,31 +444,19 @@ class PickAndPlaceNode(Node):
         """Pixel centroid + depth -> a point in base_link, or None."""
         if self.depth_image is None or self.intrinsics is None:
             return None
-        u = int(u)
-        v = int(v)
-        half = self.depth_window // 2
-        patch = self.depth_image[max(0, v - half):v + half + 1,
-                                 max(0, u - half):u + half + 1]
-        patch = patch[np.isfinite(patch) & (patch > 0.0)]
-        if patch.size == 0:
+        depth = depth_probe.patch_depth(self.depth_image, u, v, self.depth_window)
+        if depth is None:
             return None
-        depth = float(np.median(patch))
-
-        fx, fy, cx, cy = self.intrinsics
-        camera_point = np.array([(u - cx) * depth / fx,
-                                 (v - cy) * depth / fy,
-                                 depth])
+        camera_point = depth_probe.camera_point(u, v, depth, self.intrinsics)
         try:
             tf = self.tf_buffer.lookup_transform(
                 'base_link', 'depth_cam_frame', rclpy.time.Time())
         except tf2_ros.TransformException as exc:
             self.get_logger().warn(f'no transform: {exc}')
             return None
-
-        t = tf.transform.translation
-        r = tf.transform.rotation
-        rotation = _quaternion_matrix(r.x, r.y, r.z, r.w)
-        return rotation @ camera_point + np.array([t.x, t.y, t.z])
+        t, r = tf.transform.translation, tf.transform.rotation
+        return depth_probe.transform_point(
+            camera_point, (t.x, t.y, t.z), (r.x, r.y, r.z, r.w))
 
     def plan_for(self, point):
         return arm_ik.plan_grasp(
@@ -692,14 +680,6 @@ class PickAndPlaceNode(Node):
                 self.remaining.remove(self.target_color)
             self.target_color = None
             self.enter(State.IDLE if self.manual else State.LOOK)
-
-
-def _quaternion_matrix(x, y, z, w):
-    return np.array([
-        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
-    ])
 
 
 def main():

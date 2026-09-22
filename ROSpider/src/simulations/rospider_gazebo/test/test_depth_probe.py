@@ -125,3 +125,35 @@ def test_drifting_right_steers_the_other_way():
 def test_nothing_under_any_inner_probe_stops():
     policy = BridgePolicy(FLOOR)
     assert policy.update(FLOOR, 1.2, 1.2, 1.2, FLOOR) == (0.0, 0.0)
+
+
+# ------------------------------------------------------------ pixel -> point
+
+K = [500.0, 0.0, 320.0, 0.0, 500.0, 240.0, 0.0, 0.0, 1.0]
+
+
+def test_patch_depth_is_the_median_ignoring_holes():
+    frame = np.full((10, 10), 2.0)
+    frame[4:7, 4:7] = [[1.0, 1.0, np.inf], [1.0, 0.0, np.nan], [1.0, 1.0, 1.0]]
+    assert depth_probe.patch_depth(frame, 5, 5, window=3) == pytest.approx(1.0)
+
+
+def test_patch_depth_with_no_reading_is_none():
+    frame = np.zeros((10, 10))
+    assert depth_probe.patch_depth(frame, 5, 5) is None
+
+
+def test_camera_point_at_the_principal_point_is_straight_ahead():
+    assert depth_probe.camera_point(320, 240, 2.0, K).tolist() == [0.0, 0.0, 2.0]
+
+
+def test_camera_point_scales_with_depth_over_focal_length():
+    x, y, z = depth_probe.camera_point(420, 140, 1.0, K)
+    assert (x, y, z) == pytest.approx((0.2, -0.2, 1.0))
+
+
+def test_transform_point_rotates_then_translates():
+    # 90 deg about z: (1, 0, 0) -> (0, 1, 0), then shifted by (0, 0, 0.3)
+    s = np.sqrt(0.5)
+    point = depth_probe.transform_point([1.0, 0.0, 0.0], (0.0, 0.0, 0.3), (0.0, 0.0, s, s))
+    assert point.tolist() == pytest.approx([0.0, 1.0, 0.3])

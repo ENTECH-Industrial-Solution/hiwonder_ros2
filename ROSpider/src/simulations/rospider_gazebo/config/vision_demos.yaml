@@ -126,6 +126,18 @@ track_and_grab:
     gui: true
     start: false
     color: red
+    # The window's two switches, as they start: pick where the robot
+    # stands (walk: false) or walk up to the block first; put the block
+    # down as soon as it is lifted (auto_place: true) or hold it for the
+    # Place button. Both are also live-settable: ~/set_walk, ~/set_auto_place.
+    walk: false
+    auto_place: true
+    # Walking: where the block must end up in front (the pedestal spot, in
+    # base_footprint metres), how close counts, and how long it may drop
+    # out of view before the search starts over.
+    target_x: 0.235
+    tolerance: 0.04
+    lost_timeout: 3.0
     pan_gain: 0.055
     tilt_gain: 0.05
     # "x y z" in base_footprint metres, where the grabbed block is put down:
