@@ -1,7 +1,6 @@
 """Shape recognition and volume estimation from a depth image.
 
-Shared by scripts/object_volume.py and scripts/object_classification.py,
-ported from example/rgbd_example/include/{object_volume_measurement,
+Used by scripts/object_classification.py, ported from example/rgbd_example/include/{object_volume_measurement,
 object_classification}.py. Every threshold below is upstream's.
 
 Distances are millimetres throughout -- use depth_probe.to_millimetres() on

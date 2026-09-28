@@ -72,8 +72,13 @@ apriltag_detect:
     # robot's heading, in metres, where approach/place stop -- so it does
     # not depend on the arm pose. place then calls /pick_and_place/place
     # with the station's pedestal top, so ~/pick something first.
+    # cube names which cube belongs on this tag's station; the node ignores
+    # it and only republishes it on ~/behaviors.
     behaviors:
-      tag0: {action: none, standoff: 0.4}
+      tag0: {action: none, standoff: 0.4, cube: ''}
+
+    # What the tuner's cube column offers.
+    cube_choices: [red, green, blue]
 
     # Where pick_place.launch.py spawns tag_station_<id> models, in the world
     # frame: [x, y, yaw]. The key names the tag id. The node never reads this;

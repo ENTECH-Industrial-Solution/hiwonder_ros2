@@ -152,8 +152,8 @@ class PickAndPlaceNode(Node):
         self.create_subscription(
             JointState, '/joint_states', self.joint_callback, 10)
 
-        # For the mini game's mission node, which sequences ~/pick and
-        # ~/place and needs to know when each finished. Latched, so a late
+        # For a node that sequences ~/pick and ~/place and needs to know
+        # when each finished (track_and_grab). Latched, so a late
         # subscriber sees the current state at once.
         latched = QoSProfile(depth=1,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)

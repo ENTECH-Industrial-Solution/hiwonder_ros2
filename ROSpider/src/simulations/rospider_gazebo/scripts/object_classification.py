@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Sort what is on the table by shape and colour -- the classification window.
 
-A port of example/rgbd_example/include/object_classification.py. Same depth
-recognition as scripts/object_volume.py, but reported the way the sorting demo
-reports it: shape, colour and the object's position in the camera frame, with
-a white box round each one on the depth colour map.
+A port of example/rgbd_example/include/object_classification.py: upstream's
+depth recognition (rospider_gazebo/shape_detect.py), reported the way the
+sorting demo reports it: shape, colour and the object's position in the
+camera frame, with a white box round each one on the depth colour map.
 
 What is deliberately missing is the arm. Upstream's node picks each recognised
 object up and drops it in a per-shape or per-colour bin, through the

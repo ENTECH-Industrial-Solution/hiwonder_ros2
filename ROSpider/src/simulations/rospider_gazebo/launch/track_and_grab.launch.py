@@ -30,8 +30,8 @@ from launch_ros.actions import Node
 #: frame, the robot at the origin facing +x. The pedestal top is 0.08 m, so
 #: a block spawns with its centre at 0.105. Green keeps pick_place.yaml's
 #: pedestal spot; red and blue sit square off to either side, so the walk
-#: to them starts sideways and back, away from green's pedestal -- the
-#: robot stands 1 cm from it and cannot turn in place there.
+#: to them turns the robot round -- after it has backed off green's
+#: pedestal, which it stands 1 cm from and would climb turning there.
 SPREAD = (
     ('pick_pedestal', 'pick_pedestal', (0.200, 0.0, 0.040)),
     ('pick_cube_green', 'pick_cube_green', (0.235, 0.0, 0.105)),

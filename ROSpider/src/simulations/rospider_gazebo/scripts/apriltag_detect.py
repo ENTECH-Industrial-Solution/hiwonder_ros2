@@ -105,6 +105,10 @@ class AprilTagNode(Node):
             str(self._param('tuned_path', '~/.ros/apriltag_tuned.json'))))
         image_topic = str(self._param('image_topic',
                                       '/depth_cam/rgb/image_raw'))
+        # What the tuner offers in each tag's "cube" column: the cubes of
+        # the scene being played.
+        self.cube_choices = [str(c) for c in
+                             self._param('cube_choices', ['red', 'green', 'blue'])]
 
         # Shared with the tuner thread: it reads the last overlay frame and
         # the status, and writes settings through apply_settings().
@@ -116,6 +120,13 @@ class AprilTagNode(Node):
         self.memory_frame = str(self._param('memory_frame', 'odom'))
         self.memory = {}          # tag id -> (R, t) of the tag in memory_frame
 
+        # The live per-tag rows, for whoever needs them: the YAML, the tuned JSON and every
+        # window edit end up in apply_settings, not in ROS parameters, so
+        # `ros2 param get` would only ever show the YAML.
+        latched = QoSProfile(depth=1,
+                             durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.behaviors_pub = self.create_publisher(String, '~/behaviors',
+                                                   latched)
         self.baseline = tag_settings.from_flat(self._flat_params())
         self.behavior = TagBehavior(
             self.baseline['control'], self.baseline['behaviors'],
@@ -138,13 +149,10 @@ class AprilTagNode(Node):
                                                '/pick_and_place/place')
         self.broadcaster = tf2_ros.TransformBroadcaster(self)
         # Remembered tags go out as static TF tag_<id>_remembered under
-        # memory_frame, re-sent on every change, so another node (the mini
-        # game's mission) can look a station up long after the camera
+        # memory_frame, re-sent on every change, so another node can look a station up long after the camera
         # stopped seeing it. Static rather than periodic: the pose does not
         # move until the tag is seen again.
         self.memory_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
-        latched = QoSProfile(depth=1,
-                             durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.status_pub = self.create_publisher(String, '~/status', latched)
         self.place_result_pub = self.create_publisher(String, '~/place_result',
                                                       latched)
@@ -193,6 +201,8 @@ class AprilTagNode(Node):
             self.max_reproj_error = float(settings['max_reproj_error_px'])
             self.behavior.configure(settings['control'],
                                     settings['behaviors'])
+        self.behaviors_pub.publish(String(data=json.dumps(
+            settings['behaviors'], sort_keys=True)))
 
     def _load_tuned(self):
         """Overlay the tuned JSON on the YAML baseline, if the file exists.
@@ -588,14 +598,16 @@ class AprilTagNode(Node):
         ttk.Label(tags_box, text='id').grid(row=0, column=0)
         ttk.Label(tags_box, text='action').grid(row=0, column=1)
         ttk.Label(tags_box, text='standoff m').grid(row=0, column=2)
-        tag_rows = {}       # tag id -> (action StringVar, standoff StringVar)
+        ttk.Label(tags_box, text='cube').grid(row=0, column=3)
+        tag_rows = {}       # tag id -> (action, standoff, cube) StringVars
 
         def add_row(tag_id, row_settings):
             if tag_id in tag_rows:
                 return
             action = tk.StringVar(value=row_settings['action'])
             standoff = tk.StringVar(value=str(row_settings['standoff']))
-            tag_rows[tag_id] = (action, standoff)
+            cube = tk.StringVar(value=row_settings['cube'])
+            tag_rows[tag_id] = (action, standoff, cube)
             r = len(tag_rows)
             ttk.Label(tags_box, text=str(tag_id)).grid(row=r, column=0)
             box = ttk.Combobox(tags_box, textvariable=action, width=9,
@@ -606,6 +618,10 @@ class AprilTagNode(Node):
             entry.grid(row=r, column=2)
             entry.bind('<Return>', lambda _e: self._tuner_apply())
             entry.bind('<FocusOut>', lambda _e: self._tuner_apply())
+            box = ttk.Combobox(tags_box, textvariable=cube, width=8,
+                               values=[''] + self.cube_choices, state='readonly')
+            box.grid(row=r, column=3)
+            box.bind('<<ComboboxSelected>>', lambda _e: self._tuner_apply())
 
         for key in sorted(settings['behaviors'], key=tag_settings.tag_id):
             add_row(tag_settings.tag_id(key), settings['behaviors'][key])
@@ -627,8 +643,7 @@ class AprilTagNode(Node):
                 # again.
                 message.set('tag id must be a non-negative integer')
                 return
-            add_row(tag_id, {'action': 'none',
-                             'standoff': tag_settings.DEFAULT_STANDOFF})
+            add_row(tag_id, tag_settings.default_behavior())
             new_id.set('')
             self._tuner_apply()
         ttk.Button(add_box, text='add id', command=add_typed).pack(side='left')
@@ -675,13 +690,12 @@ class AprilTagNode(Node):
             reproj.set(base['max_reproj_error_px'])
             for key, var in control_vars.items():
                 var.set(str(base['control'][key]))
-            for tag_id, (action, standoff) in tag_rows.items():
-                row = base['behaviors'].get(
-                    tag_settings.tag_key(tag_id),
-                    {'action': 'none',
-                     'standoff': tag_settings.DEFAULT_STANDOFF})
+            for tag_id, (action, standoff, cube) in tag_rows.items():
+                row = base['behaviors'].get(tag_settings.tag_key(tag_id),
+                                            tag_settings.default_behavior())
                 action.set(row['action'])
                 standoff.set(str(row['standoff']))
+                cube.set(row['cube'])
             message.set('reverted to config/apriltag.yaml')
 
         def do_yaml():
@@ -726,8 +740,9 @@ class AprilTagNode(Node):
                 'behaviors': {
                     tag_settings.tag_key(tag_id): {
                         'action': action.get(),
-                        'standoff': float(standoff.get())}
-                    for tag_id, (action, standoff) in tag_rows.items()},
+                        'standoff': float(standoff.get()),
+                        'cube': cube.get()}
+                    for tag_id, (action, standoff, cube) in tag_rows.items()},
             }
             for key in ('adaptive_thresh_win_size_min',
                         'adaptive_thresh_win_size_max',
@@ -749,8 +764,7 @@ class AprilTagNode(Node):
                 image_label.image = photo      # keep it alive
             status.configure(text=f'{text}\n{response}')
             for tag_id in seen:
-                add_row(tag_id, {'action': 'none',
-                                 'standoff': tag_settings.DEFAULT_STANDOFF})
+                add_row(tag_id, tag_settings.default_behavior())
             root.after(50, refresh)
         refresh()
 

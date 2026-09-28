@@ -7,23 +7,6 @@
 # The floor distances below are guesses for the stock world. Measure yours
 # once with `debug:=true` and paste the number the node logs back in here.
 
-color_position:
-  ros__parameters:
-    # '' follows whatever the detector reports; set one of the colour names
-    # in config/color_detect.yaml to pin the demo to it.
-    color: ''
-    objects_topic: /yolo/object_detect
-
-color_recognition:
-  ros__parameters:
-    # Which colours get a move. Names must match the detector's classes.
-    colors: ['red', 'green', 'blue']
-    objects_topic: /yolo/object_detect
-
-apriltag_position:
-  ros__parameters:
-    tags_topic: /apriltag_detect/apriltag_info
-
 apriltag_track:
   ros__parameters:
     tags_topic: /apriltag_detect/apriltag_info
@@ -32,74 +15,12 @@ apriltag_track:
     speed_limit: 0.05        # m/s
     turn_limit: 0.2          # rad/s
 
-ar_view:
-  ros__parameters:
-    # rectangle draws a cube. For one of Hiwonder's .obj models, give
-    # model_path (they are not installed -- point at the source tree) and the
-    # scale upstream used: bicycle 50, fox 4, chair 400, cow 0.4, wolf 0.6.
-    model: rectangle
-    model_path: ''
-    model_scale: 1.0
-    model_yaw_deg: 0.0
-
-kcf_track:
-  ros__parameters:
-    # auto tries KCF, then CSRT, then MIL -- OpenCV 5 ships none of the first
-    # two in the pip wheel. Pin one with kcf, csrt or mil.
-    tracker: auto
-    turn_limit: 0.3          # rad/s
-
-prevent_falling:
-  ros__parameters:
-    debug: false             # true: measure the floor distance and log it
-    plane_distance: 0.35     # metres (this demo works in metres)
-    edge_tolerance: 0.04
-    forward_speed: 0.05
-    turn_speed: 0.2
-
-cross_bridge:
-  ros__parameters:
-    debug: false
-    plane_distance: 0.35     # metres
-    edge_tolerance: 0.04
-    steer_tolerance: 0.06
-    forward_speed: 0.02
-
-object_volume:
-  ros__parameters:
-    debug: false
-    plane_distance: 350.0    # MILLIMETRES here, as upstream has it
-    roi: [50, 350, 150, 500]  # [y_min, y_max, x_min, x_max]
-
 object_classification:
   ros__parameters:
     debug: false
     plane_distance: 350.0    # millimetres
     roi: [50, 350, 150, 500]
     shapes: ['sphere', 'cuboid', 'cylinder']
-
-hand_detect:
-  ros__parameters:
-    max_hands: 2
-    detection_confidence: 0.4
-    tracking_confidence: 0.4
-
-hand_gesture:
-  ros__parameters:
-    detection_confidence: 0.4
-    tracking_confidence: 0.4
-
-finger_trajectory:
-  ros__parameters:
-    detection_confidence: 0.6
-    tracking_confidence: 0.05
-
-color_track:
-  ros__parameters:
-    color: red               # the block to follow, as upstream's default
-    start: true              # false: wait for ~/start
-    pan_gain: 0.055          # pulses per pixel of horizontal error
-    tilt_gain: 0.05          # pulses per pixel of vertical error
 
 object_tracking:
   ros__parameters:
@@ -133,25 +54,16 @@ track_and_grab:
     walk: false
     auto_place: true
     # Walking: where the block must end up in front (the pedestal spot, in
-    # base_footprint metres), how close counts, and how long it may drop
-    # out of view before the search starts over.
+    # base_footprint metres), how close to that distance counts (it must
+    # also be within 1.5 cm of dead ahead), and how long it may drop out
+    # of view before the search starts over.
     target_x: 0.235
     tolerance: 0.04
     lost_timeout: 3.0
     pan_gain: 0.055
     tilt_gain: 0.05
-    # "x y z" in base_footprint metres, where the grabbed block is put down:
-    # to the left, out of the camera's view, as upstream swings it aside.
+    # "x y z" in base_footprint metres, where place: auto puts the grabbed
+    # block down: to the left, as upstream swings it aside -- the pedestal
+    # it came off is in front. The Place button puts it down in front, at
+    # pick_place.yaml's place_point.
     place_point: '0.02 0.16 0.035'
-
-face_track:
-  ros__parameters:
-    detection_confidence: 0.3
-    pan_gain: 0.055          # pulses per pixel of horizontal error
-    tilt_gain: 0.05          # pulses per pixel of vertical error
-
-pose_control:
-  ros__parameters:
-    model_complexity: 1
-    detection_confidence: 0.6
-    tracking_confidence: 0.7

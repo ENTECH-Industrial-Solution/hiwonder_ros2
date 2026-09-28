@@ -49,6 +49,7 @@ def test_from_flat_reads_dotted_parameter_names():
         'behaviors.tag0.action': 'approach',
         'behaviors.tag0.standoff': 0.35,
         'behaviors.tag7.action': 'stop',
+        'behaviors.tag7.cube': 'pink',
         # Not part of the settings: must be ignored, not rejected.
         'stations.station0': [0.9, 0.0, 3.14159],
         'use_sim_time': True,
@@ -61,8 +62,9 @@ def test_from_flat_reads_dotted_parameter_names():
     assert settings['control']['max_linear'] == 0.04
     assert settings['control']['kp_yaw'] == tag_settings.CONTROL_DEFAULTS['kp_yaw']
     assert settings['behaviors'] == {
-        'tag0': {'action': 'approach', 'standoff': 0.35},
-        'tag7': {'action': 'stop', 'standoff': tag_settings.DEFAULT_STANDOFF},
+        'tag0': {'action': 'approach', 'standoff': 0.35, 'cube': ''},
+        'tag7': {'action': 'stop', 'standoff': tag_settings.DEFAULT_STANDOFF,
+                 'cube': 'pink'},
     }
 
 
@@ -77,7 +79,8 @@ def test_from_flat_rejects_bad_values():
 
 def test_merge_overlays_key_by_key():
     baseline = tag_settings.defaults()
-    baseline['behaviors']['tag0'] = {'action': 'approach', 'standoff': 0.4}
+    baseline['behaviors']['tag0'] = {'action': 'approach', 'standoff': 0.4,
+                                     'cube': 'sky'}
     merged = tag_settings.merge(baseline, {
         'detector': {'adaptive_thresh_win_size_max': 51},
         'control': {'kp_dist': 0.6},
@@ -87,10 +90,11 @@ def test_merge_overlays_key_by_key():
     assert merged['detector']['adaptive_thresh_win_size_min'] == 3
     assert merged['control']['kp_dist'] == 0.6
     assert merged['max_reproj_error_px'] == 3.0
-    # A partial behaviour keeps the baseline's other field.
-    assert merged['behaviors']['tag0'] == {'action': 'approach', 'standoff': 0.3}
-    assert merged['behaviors']['tag3'] == {'action': 'place',
-                                           'standoff': tag_settings.DEFAULT_STANDOFF}
+    # A partial behaviour keeps the baseline's other fields.
+    assert merged['behaviors']['tag0'] == {'action': 'approach', 'standoff': 0.3,
+                                           'cube': 'sky'}
+    assert merged['behaviors']['tag3'] == tag_settings.default_behavior() | {
+        'action': 'place'}
     # And the baseline is untouched.
     assert baseline['detector']['adaptive_thresh_win_size_max'] == 23
     assert baseline['behaviors']['tag0']['standoff'] == 0.4
@@ -117,7 +121,9 @@ def test_merge_coerces_and_validates():
 
 def test_yaml_block_is_a_paste_ready_config():
     settings = tag_settings.defaults()
-    settings['behaviors']['tag0'] = {'action': 'place', 'standoff': 0.3}
+    settings['behaviors']['tag0'] = {'action': 'place', 'standoff': 0.3,
+                                     'cube': 'pink'}
+    settings['behaviors']['tag1'] = tag_settings.default_behavior()
     text = tag_settings.yaml_block(settings)
     lines = text.splitlines()
     assert lines[0] == 'apriltag_detect:'
@@ -128,10 +134,11 @@ def test_yaml_block_is_a_paste_ready_config():
     assert '    control:' in lines
     assert '      max_linear: 0.05' in lines
     assert '    behaviors:' in lines
-    assert '      tag0: {action: place, standoff: 0.3}' in lines
+    assert '      tag0: {action: place, standoff: 0.3, cube: pink}' in lines
     # It must parse back to the same settings.
     import yaml
     parsed = yaml.safe_load(text)['apriltag_detect']['ros__parameters']
     assert parsed['detector'] == settings['detector']
+    assert parsed['behaviors'] == settings['behaviors']
     assert parsed['control'] == settings['control']
     assert parsed['behaviors'] == settings['behaviors']

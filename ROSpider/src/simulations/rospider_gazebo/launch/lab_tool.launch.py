@@ -8,8 +8,7 @@ other launch that starts Gazebo), the way the real tool needs
 `ros2 launch peripherals depth_camera.launch.py` first.
 
   config       the LAB bands file to start from: a name in config/ or a path
-               (default color_detect.yaml; color_detect_arena.yaml for the
-               mini game's pastels)
+               (default color_detect.yaml)
   tuned_path   where Save writes (default ~/.ros/color_detect_tuned.json)
 """
 

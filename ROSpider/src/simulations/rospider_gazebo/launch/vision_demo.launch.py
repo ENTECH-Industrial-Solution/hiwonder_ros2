@@ -1,9 +1,9 @@
 """Start one of the ported Hiwonder demo windows.
 
     ros2 launch rospider_gazebo gazebo.launch.py
-    ros2 launch rospider_gazebo vision_demo.launch.py demo:=color_position
+    ros2 launch rospider_gazebo vision_demo.launch.py demo:=apriltag_track
 
-One launch file rather than fifteen: every demo takes the same handful of
+One launch file rather than one per demo: every demo takes the same handful of
 arguments and differs only in which executable runs and which detector it
 needs, so the table below is the whole difference.
 
@@ -14,8 +14,6 @@ then bring a window up against the same world.
 
 Arguments:
   demo          which window to open (see DEMOS below)
-  source        sim (the robot's camera) or webcam (the PC's own, for the
-                MediaPipe demos -- nobody is in the simulated world)
   detector      auto, color, yolo or none: which detector to start for the
                 demos that read one. auto picks the one the demo was
                 written for.
@@ -23,7 +21,7 @@ Arguments:
   use_sim_time  false for a camera-only demo with no simulator running
 
 Anything else on the command line that matches a demo's own parameter --
-debug, plane_distance, target_tag, color, tracker, model_path, ... -- is
+debug, plane_distance, target_tag, color, walk, ... -- is
 passed through; see OVERRIDES.
 """
 
@@ -39,25 +37,11 @@ from launch_ros.actions import Node
 #: directly. The keys are also the script names in scripts/ and the node
 #: names the config file is keyed by.
 DEMOS = {
-    'color_position': 'color',
-    'color_recognition': 'color',
-    'color_track': 'color',
     'object_tracking': None,
     'line_following': None,
     'track_and_grab': None,
-    'apriltag_position': 'apriltag',
     'apriltag_track': 'apriltag',
-    'ar_view': None,
-    'kcf_track': None,
-    'prevent_falling': None,
-    'cross_bridge': None,
-    'object_volume': None,
     'object_classification': None,
-    'hand_detect': None,
-    'hand_gesture': None,
-    'finger_trajectory': None,
-    'face_track': None,
-    'pose_control': None,
 }
 
 #: Demo parameters that can be set on the command line. Left empty, each one
@@ -65,17 +49,12 @@ DEMOS = {
 #: default, so only what is actually given is overridden.
 OVERRIDES = (
     'image_topic', 'depth_topic', 'objects_topic', 'tags_topic',
-    'color', 'target_tag', 'stop_distance', 'speed_limit',
-    'turn_limit', 'tracker', 'model', 'model_path', 'model_scale',
-    'model_yaw_deg', 'tag_size', 'debug', 'plane_distance', 'edge_tolerance',
-    'steer_tolerance', 'forward_speed', 'turn_speed', 'max_hands',
-    'detection_confidence', 'tracking_confidence', 'pan_gain', 'tilt_gain',
-    'flip', 'start', 'place_point', 'threshold', 'pick_repeat',
-    'stop_threshold', 'scan_topic', 'gui', 'walk', 'auto_place', 'target_x',
-    'tolerance', 'lost_timeout',
+    'color', 'target_tag', 'stop_distance', 'speed_limit', 'turn_limit',
+    'debug', 'plane_distance', 'pan_gain', 'tilt_gain', 'flip', 'start',
+    'place_point', 'threshold', 'pick_repeat', 'stop_threshold',
+    'scan_topic', 'gui', 'walk', 'auto_place', 'target_x', 'tolerance',
+    'lost_timeout',
 )
-
-WEBCAM_TOPIC = '/webcam/image_raw'
 
 
 def coerce(text):
@@ -104,7 +83,6 @@ def launch_setup(context, *args, **kwargs):
         raise RuntimeError(
             f'unknown demo {demo!r}; expected one of {", ".join(sorted(DEMOS))}')
 
-    source = LaunchConfiguration('source').perform(context)
     detector = LaunchConfiguration('detector').perform(context)
     if detector == 'auto':
         detector = DEMOS[demo] or 'none'
@@ -116,8 +94,6 @@ def launch_setup(context, *args, **kwargs):
         value = LaunchConfiguration(name).perform(context)
         if value != '':
             overrides[name] = coerce(value)
-    if source == 'webcam' and 'image_topic' not in overrides:
-        overrides['image_topic'] = WEBCAM_TOPIC
     if detector == 'yolo' and 'image_topic' not in overrides:
         # The colour demos default to /color_detect/image_result; the YOLO
         # node draws its overlay on its own topic instead.
@@ -131,20 +107,6 @@ def launch_setup(context, *args, **kwargs):
         parameters=[os.path.join(pkg, 'config', 'vision_demos.yaml'),
                     overrides],
     )]
-
-    if source == 'webcam':
-        nodes.append(Node(
-            package='rospider_gazebo',
-            executable='webcam_publisher.py',
-            name='webcam_publisher',
-            output='screen',
-            parameters=[{
-                'use_sim_time': use_sim_time,
-                'topic': WEBCAM_TOPIC,
-                'device': coerce(
-                    LaunchConfiguration('device').perform(context)),
-            }],
-        ))
 
     if detector == 'color':
         nodes.append(Node(
@@ -180,9 +142,6 @@ def generate_launch_description():
     arguments = [
         DeclareLaunchArgument('demo', choices=sorted(DEMOS),
                               description='which demo window to open'),
-        DeclareLaunchArgument('source', default_value='sim',
-                              choices=['sim', 'webcam'],
-                              description="the robot's camera, or the PC's"),
         DeclareLaunchArgument('detector', default_value='auto',
                               choices=['auto', 'color', 'yolo', 'apriltag',
                                        'none'],
@@ -191,8 +150,6 @@ def generate_launch_description():
                               description='false: headless, publish only'),
         DeclareLaunchArgument('use_sim_time', default_value='true',
                               description='false with no simulator running'),
-        DeclareLaunchArgument('device', default_value='0',
-                              description='webcam index or /dev path'),
     ]
     arguments += [DeclareLaunchArgument(name, default_value='')
                   for name in OVERRIDES]

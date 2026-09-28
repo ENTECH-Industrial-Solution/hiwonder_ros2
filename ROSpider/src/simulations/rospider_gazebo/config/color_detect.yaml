@@ -16,7 +16,7 @@ color_detect:
     kernel_px: 5
     colors: ['red', 'green', 'blue']
     # circle: the min-enclosing circle of the largest blob, as upstream's
-    # color_position / color_recognition ask for; rect: its min-area box
+    # color demos draw it; rect: its min-area box
     # plus a centre dot. Only the drawn image_result differs.
     detect_type: circle
 

@@ -23,7 +23,7 @@ def test_arm_pulses_match_the_robot_init_pose():
 
 
 def test_horizontal_camera_pulse():
-    """arm_pose:=horizontal is joint4 at -0.286 rad; face_track starts at 432."""
+    """arm_pose:=horizontal is joint4 at -0.286 rad; upstream face_track starts at 432."""
     assert servo_map.pulse_to_rad('joint4', 432) == pytest.approx(-0.286, abs=5e-3)
 
 
@@ -62,7 +62,7 @@ def test_round_trip():
 
 
 def test_positions_to_angles_reads_a_hiwonder_call():
-    # The look pose scripts/color_recognition.py sends.
+    # The look pose upstream color_recognition sends.
     angles = servo_map.positions_to_angles(
         ((19, 500), (20, 750), (21, 200), (22, 150), (23, 500), (24, 700)))
     assert set(angles) == {'joint1', 'joint2', 'joint3', 'joint4', 'joint5',
@@ -73,7 +73,7 @@ def test_positions_to_angles_reads_a_hiwonder_call():
 
 
 def test_leg_servo_ids_match_the_pose_control_mapping():
-    """scripts/pose_control.py mirrors arms onto ids 5/3/1 and 6/4/2."""
+    """Upstream pose_control mirrors arms onto ids 5/3/1 and 6/4/2."""
     assert servo_map.joint_name(5) == 'coxa_LF_joint'
     assert servo_map.joint_name(3) == 'femur_LF_joint'
     assert servo_map.joint_name(1) == 'tibla_LF_joint'

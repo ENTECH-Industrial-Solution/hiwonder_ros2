@@ -1,7 +1,7 @@
 """AprilTag station geometry and its SDF, with no OpenCV in sight.
 
 tags.py re-exports everything here, so callers keep saying tags.TAG_SIZE and
-tags.station_sdf(); this module exists because mini_game.launch.py needs
+tags.station_sdf(); this module exists because a launch file may need
 station_sdf() and importing cv2 inside `ros2 launch` sets Qt's plugin path
 for every child process, which crashes the Gazebo GUI.
 
@@ -46,7 +46,7 @@ BOARD_OFFSET_X = -0.12
 TAG_CENTRE_HEIGHT = 0.25
 POST_SIZE = (0.03, 0.03, TAG_CENTRE_HEIGHT - BOARD_FACE / 2.0)
 
-# The mini game's colour marker: a square panel above the tag board, on the
+# An optional colour marker: a square panel above the tag board, on the
 # same post. Vertical so a level camera reads its colour from metres away.
 MARKER_SIZE = 0.20
 MARKER_CENTRE_HEIGHT = TAG_CENTRE_HEIGHT + BOARD_FACE / 2.0 + 0.02 + MARKER_SIZE / 2.0
@@ -77,7 +77,7 @@ def station_sdf(tag_id, marker_rgba=None, tag_size=TAG_SIZE):
 
     The model faces +x: a robot approaching from +x sees the tag.
 
-    `marker_rgba` adds the mini game's colour panel, MARKER_SIZE square,
+    `marker_rgba` adds a colour panel, MARKER_SIZE square,
     above the tag on a taller post: it says which cube belongs on this
     station, and it is vertical rather than painted on the floor so a level
     camera can read its colour from metres away. None gives exactly the

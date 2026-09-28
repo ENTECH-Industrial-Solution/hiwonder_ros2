@@ -24,12 +24,14 @@ from rospider_gazebo.pid import PID, set_range
 from rospider_gazebo.vision_demo import VisionDemo
 
 #: Upstream's init_process() pose, servo ids 19-24.
-LOOK_POSE = ((19, 500), (20, 750), (21, 200), (22, 150), (23, 500), (24, 700))
+LOOK_POSE = ((19, 500), (20, 750), (21, 150), (22, 150), (23, 500), (24, 700))
 
 #: Pixels off centre that still count as centred, as upstream's x deadband.
 YAW_DEADBAND = 20
-#: Metres off the standoff that still count as arrived.
-DISTANCE_DEADBAND = 0.03
+#: Metres off the standoff that still count as arrived. Upstream's is 1 of
+#: its d_stop 15, about 7%; 0.5 here swallowed the whole standoff, so the
+#: robot stopped 0.85 m out and never backed away when the tag came closer.
+DISTANCE_DEADBAND = 0.05
 
 
 class AprilTagTrackNode(VisionDemo):
@@ -41,11 +43,11 @@ class AprilTagTrackNode(VisionDemo):
                          image_topic='/apriltag_detect/image_result',
                          cmd_vel=True, servos=True)
         self.target_tag = int(self.param('target_tag', 1))
-        self.stop_distance = float(self.param('stop_distance', 0.35))
+        self.stop_distance = float(self.param('stop_distance', 0.5))
         self.speed_limit = float(self.param('speed_limit', 0.05))
         self.turn_limit = float(self.param('turn_limit', 0.2))
         self.pid_yaw = PID(0.005, 0.0, 0.000001)
-        self.pid_distance = PID(1.0, 0.0, 0.0)
+        self.pid_distance = PID(0.5, 0.0, 0.0)
         self.tag = None
         self.create_subscription(
             ApriltagsInfo,

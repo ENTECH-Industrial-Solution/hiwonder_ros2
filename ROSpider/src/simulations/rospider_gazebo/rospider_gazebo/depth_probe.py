@@ -1,7 +1,8 @@
 """Depth-image probes and the two driving policies built on them.
 
-Shared by scripts/prevent_falling.py and scripts/cross_bridge.py, ported from
-example/rgbd_example/include/{prevent_falling_node,cross_bridge_node}.py.
+Ported from example/rgbd_example/include/{prevent_falling_node,
+cross_bridge_node}.py; the probes are used by pick_and_place, track_and_grab
+and shape_detect.
 
 One thing had to change for the simulation. The real depth camera publishes
 16UC1 in millimetres; Gazebo's publishes 32FC1 in metres, with inf where the

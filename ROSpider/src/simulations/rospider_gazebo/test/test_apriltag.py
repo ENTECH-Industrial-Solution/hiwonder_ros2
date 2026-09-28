@@ -161,7 +161,7 @@ def test_station_boxes_match_tags_module():
 
 
 def test_station_marker_is_optional_and_readable():
-    # The mini game's colour panel must not change the committed stations
+    # The optional colour panel must not change the committed stations
     # (marker None), and with a colour it adds one visual above the board
     # on a post tall enough to hold it.
     plain = tags.station_sdf(3)

@@ -11,7 +11,7 @@ stop dot: its height in the frame sets the forward speed, its x the turn.
 Threshold, picker and PID gains are upstream's
 (rospider_gazebo/color_picker.py). One change: once locked on, the patch
 nearest the last one is kept rather than the biggest -- the rule upstream
-wrote but never wired up -- because the arena's posters carry every colour
+wrote but never wired up -- because the room's posters carry every colour
 and a bigger patch of it on the wall would steal the target.
 
 The phone app's services are kept so the docs' commands work: ~/enter

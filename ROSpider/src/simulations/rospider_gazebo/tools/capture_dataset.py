@@ -17,8 +17,8 @@ confidently wrong model.
 
 The read-back goes through the gz CLI, not through config/gz_bridge.yaml. The
 bridge stays as it is: pose/info is a high-rate topic, this tool runs offline
-by hand, and SIMULATION.md already records what the camera bridge alone costs
-in CPU here.
+by hand, and the camera bridge alone already costs a noticeable share of a
+CPU core.
 
 Labels are geometric, not hand-drawn: the object's eight corners are projected
 through the live camera_info and the live TF, and the depth image is used to
@@ -44,8 +44,6 @@ import rclpy
 import rclpy.duration
 import tf2_ros
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -60,23 +58,14 @@ from rospider_gazebo import arm_ik, labelling  # noqa: E402  (needs the sys.path
 # same viewpoint the model is used from.
 LOOK_POSE = [0.0, 0.628, -1.927, -1.55, 0.0]
 
-# model name -> (class name, size in metres), per --objects. The RGB cubes
-# are what pick_place.launch.py spawns; the pastel set is the mini game's
-# (mini_game.launch.py). The class names must also appear in the picker's
-# `colors` for pick_and_place to accept them.
-OBJECT_SETS = {
-    'rgb': {
-        'pick_cube_red': ('red', (0.05, 0.05, 0.05)),
-        'pick_cube_green': ('green', (0.05, 0.05, 0.05)),
-        'pick_cube_blue': ('blue', (0.05, 0.05, 0.05)),
-    },
-    'pastel': {
-        'pick_cube_pink': ('pink', (0.05, 0.05, 0.05)),
-        'pick_cube_yellow': ('yellow', (0.05, 0.05, 0.05)),
-        'pick_cube_sky': ('sky', (0.05, 0.05, 0.05)),
-    },
+# model name -> (class name, size in metres): the cubes pick_place.launch.py
+# spawns. The class names must also appear in the picker's `colors` for
+# pick_and_place to accept them.
+OBJECTS = {
+    'pick_cube_red': ('red', (0.05, 0.05, 0.05)),
+    'pick_cube_green': ('green', (0.05, 0.05, 0.05)),
+    'pick_cube_blue': ('blue', (0.05, 0.05, 0.05)),
 }
-OBJECTS = OBJECT_SETS['rgb']
 
 CAMERA_FRAME = 'depth_cam_frame'
 WORLD_FRAME = 'odom'
@@ -236,37 +225,6 @@ class CaptureNode(Node):
     def _on_info(self, msg):
         self.camera_matrix = np.array(msg.k, dtype=np.float64).reshape(3, 3)
 
-    def drive(self, distance, speed=0.05):
-        """Straight ahead (or back) by odometry, like the mission's dock."""
-        if abs(distance) < 1e-3:
-            return
-        odom = {}
-        sub = self.create_subscription(
-            Odometry, '/odom',
-            lambda m: odom.__setitem__('p', (m.pose.pose.position.x,
-                                             m.pose.pose.position.y)), 10)
-        pub = self.create_publisher(Twist, '/controller/cmd_vel', 1)
-        deadline = time.time() + 10.0
-        while 'p' not in odom and time.time() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.1)
-        if 'p' not in odom:
-            raise RuntimeError('no /odom; is the simulation running?')
-        start = odom['p']
-        twist = Twist()
-        twist.linear.x = speed if distance > 0 else -speed
-        deadline = time.time() + abs(distance) / speed * 3 + 5
-        while time.time() < deadline:
-            x, y = odom['p']
-            if ((x - start[0]) ** 2 + (y - start[1]) ** 2) ** 0.5 >= abs(distance):
-                break
-            pub.publish(twist)
-            rclpy.spin_once(self, timeout_sec=0.05)
-        pub.publish(Twist())
-        rclpy.spin_once(self, timeout_sec=0.5)
-        self.destroy_subscription(sub)
-        self.destroy_publisher(pub)
-        print(f'drove {distance:+.2f} m')
-
     def look(self, seconds=3.0):
         """Move the arm to the picker's look_pose and wait for it."""
         pub = self.create_publisher(JointTrajectory,
@@ -398,7 +356,7 @@ def main():
     parser.add_argument('--samples', type=int, default=50)
     parser.add_argument('--out', required=True)
     parser.add_argument('--world', default='rospider_room',
-                        help="Gazebo world name: rospider_room, or 'arena' for the mini game")
+                        help='Gazebo world name')
     parser.add_argument('--val-split', type=float, default=0.2)
     parser.add_argument('--min-area-px', type=float, default=300.0)
     parser.add_argument('--occlusion-tol', type=float, default=0.03)
@@ -419,22 +377,7 @@ def main():
     parser.add_argument('--no-look', action='store_true',
                         help='leave the arm where it is instead of moving '
                              "it to pick_and_place's look_pose first")
-    parser.add_argument('--dock', type=float, default=0.0,
-                        help='drive this far straight ahead first and back '
-                             'out at the end -- 0.5 for the mini game, '
-                             'which puts the camera where the mission picks')
-    parser.add_argument('--objects', choices=sorted(OBJECT_SETS), default='rgb',
-                        help="which cubes are in the world: 'rgb' for "
-                             "pick_place.launch.py, 'pastel' for "
-                             'mini_game.launch.py (default rgb)')
     args = parser.parse_args()
-    global OBJECTS
-    OBJECTS = OBJECT_SETS[args.objects]
-    if args.objects == 'pastel' and args.x_range == [0.16, 0.25]:
-        # The arena pedestal's top spans world x 0.695..0.855 (see
-        # mini_game.launch.py); with --dock 0.5 the robot stands where the
-        # mission picks and the band below is 0.22..0.25 m ahead of it.
-        args.x_range = [0.72, 0.75]
 
     random.seed(args.seed)
     classes = [name for name, _ in OBJECTS.values()]
@@ -449,7 +392,6 @@ def main():
     stuck = 0
     try:
         node.wait_for_tf()
-        node.drive(args.dock)
         if not args.no_look:
             node.look()
         for index in range(args.samples):
@@ -502,7 +444,6 @@ def main():
             if written % 20 == 0:
                 print(f'{written} samples')
     finally:
-        node.drive(-args.dock)
         node.destroy_node()
         rclpy.try_shutdown()
         # Written in `finally` so an interrupted run still leaves a usable

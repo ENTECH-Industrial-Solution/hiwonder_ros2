@@ -36,15 +36,16 @@ Three parts are the simulation's own:
         which only reaches the pedestal in front. Walk: the camera comes up
         and sweeps for the colour (SEARCH), then the block's pixel and
         depth are put through TF into base_footprint and
-        rospider_gazebo/approach.py walks the body until the block sits at
-        the pedestal spot in front (APPROACH), and only then does the
-        settle-and-pick start. Only blocks up on a pedestal count: the
-        floor is out of the arm's reach, and the room's decorative twins
-        lie on it.
+        rospider_gazebo/approach.py turns the body to face the block and
+        walks it straight in until the block sits dead ahead at the
+        pedestal spot (APPROACH), and only then does the settle-and-pick
+        start. Only blocks up on a pedestal count: the floor is out of the
+        arm's reach, and the room's decorative twins lie on it.
       - *place: auto* / *by button*. Auto puts the block down beside the
         robot the moment it is lifted, as upstream's pick() ends. By button
         holds it up (pick_and_place's CARRY) until Place is pressed -- or
-        `~/place` is called -- so the robot can be driven off with it.
+        `~/place` is called -- so the robot can be driven off with it, and
+        then puts it down on the floor in front.
 
     ~/set_running false (or Stop) drops the job while it is tracking or
     walking; once pick_and_place has the arm it runs to the end.
@@ -76,7 +77,7 @@ from rospider_gazebo.vision_demo import VisionDemo, depth_color_map
 from std_msgs.msg import String
 from std_srvs.srv import SetBool, Trigger
 
-#: Start pose, servo ids 19-24: scripts/color_track.py's camera-levelling
+#: Start pose, servo ids 19-24: upstream color_track's camera-levelling
 #: shape, but with the wrist (servo 22) at the robot's `init` tilt, 52 deg
 #: down. Upstream's block sits on a table at camera height; the sim's sit
 #: on the 8 cm pedestal 0.235 m ahead, 43 deg below a level camera and out
@@ -114,10 +115,11 @@ SETTLE_SECONDS = 2.0
 #: in which it holds the block up, waiting to be told where to put it.
 FREE_STATES = ('IDLE', 'DONE')
 CARRY_STATE = 'CARRY'
-#: Where the block is put down, "x y z" in base_footprint metres: off to the
-#: left, the way upstream's pick() swings servo 19 to 850 (about 84 deg)
-#: before letting go, so the block leaves the camera's view instead of
-#: being picked again.
+#: Where place: auto puts the block down, "x y z" in base_footprint metres:
+#: off to the left, the way upstream's pick() swings servo 19 to 850
+#: (about 84 deg) before letting go -- in front is the pedestal the block
+#: came off. The Place button puts it down in front instead, at
+#: pick_and_place's place_point, once the robot has been driven off.
 PLACE_POINT = '0.02 0.16 0.035'
 #: What counts as a block to go for: its centre this high (base_footprint
 #: metres) -- on the 8 cm pedestal a block's centre is at 0.105; the
@@ -136,8 +138,7 @@ FREE_BEHIND = 0.15
 REACH_X = 0.35
 #: How far the body backs off before a walk, and the speed. The robot
 #: stands 1 cm from the pick pedestal in front, closer than its own
-#: corners sweep when it turns, so the first move must be straight back
-#: -- as scripts/mission.py's pick block undocks before it drives on.
+#: corners sweep when it turns, so the first move must be straight back.
 UNDOCK_M = 0.2
 UNDOCK_SPEED = 0.1
 
@@ -255,13 +256,13 @@ class TrackAndGrabNode(VisionDemo):
         self.servos.set_servo_position(1.5, LEVEL_POSE)
         self.get_logger().info('idle')
 
-    def place_now(self):
-        """Put the held block down at place_point."""
+    def place_now(self, point=''):
+        """Put the held block down at `point`, "x y z" in base_footprint;
+        empty is in front, at pick_and_place's own place_point."""
         if self.phase != CARRY:
             return f'nothing held: {self.status_text()}'
         self.phase = PLACE
-        future = self.place_client.call_async(
-            SetString.Request(data=self.place_point))
+        future = self.place_client.call_async(SetString.Request(data=point))
         future.add_done_callback(self._placed)
         return ''
 
@@ -330,10 +331,11 @@ class TrackAndGrabNode(VisionDemo):
         self.pick_state = message.data
         if message.data == CARRY_STATE and self.phase == PICK:
             # Grabbed and lifted: put it down beside the robot, as
-            # upstream's pick() ends, or hold it for the Place button.
+            # upstream's pick() ends -- the pedestal it came off is still
+            # in front -- or hold it for the Place button.
             self.phase = CARRY
             if self.auto_place:
-                self.place_now()
+                self.place_now(self.place_point)
         elif was_busy and message.data in FREE_STATES:
             # Placed (or given up): the job is over. The pick left the arm
             # at its own pose; stop_job() brings the camera back.
@@ -508,7 +510,7 @@ class TrackAndGrabNode(VisionDemo):
         return depth_probe.transform_point(point, (t.x, t.y, t.z), (r.x, r.y, r.z, r.w))
 
     def _follow(self, u, v, width, height):
-        """Two PIDs, servo 19 for x and 22 for y, as scripts/color_track.py."""
+        """Two PIDs, servo 19 for x and 22 for y, as upstream color_track."""
         self.pid_pan.SetPoint = width / 2.0
         self.pid_pan.update(u)
         self.pan = set_range(self.pan + self.pid_pan.output, *PAN_PULSE)
