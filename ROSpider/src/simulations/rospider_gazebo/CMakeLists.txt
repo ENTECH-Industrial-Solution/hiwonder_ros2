@@ -8,7 +8,8 @@ install(DIRECTORY config launch maps models rviz urdf worlds
   DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_place.py
-                 scripts/apriltag_detect.py scripts/yolo_detect.py
+                 scripts/apriltag_detect.py scripts/yolo_detect.py scripts/check_slam.py scripts/check_nav.py
+                 scripts/lifecycle_activate.py
   DESTINATION lib/${PROJECT_NAME})
 
 # The Hiwonder demo windows ported from example/ -- see launch/vision_demo.launch.py.
@@ -53,6 +54,18 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_approach test/test_approach.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_line_follower test/test_line_follower.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_slam_check test/test_slam_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_challenge_params test/test_challenge_params.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_lifecycle test/test_lifecycle.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_maps test/test_maps.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_nav_params test/test_nav_params.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_nav_check test/test_nav_check.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 

@@ -1,0 +1,18 @@
+# โจทย์ SLAM Mapping
+# แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# ค่าที่ไม่ได้อยู่ในไฟล์นี้ใช้ของ Hiwonder (slam/config/slam.yaml)
+# อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้ แล้ว launch ใหม่
+/**:
+  ros__parameters:
+    # topic ของข้อมูล LiDAR ที่ slam_toolbox อ่าน
+    scan_topic: scan_raw
+    # ระยะไกลสุดของ LiDAR ที่เอามาวาดแผนที่ (เมตร)
+    max_laser_range: 0.5
+    # ขนาดของช่องหนึ่งช่องในแผนที่ (เมตรต่อช่อง)
+    resolution: 0.25
+    # ส่งแผนที่ใหม่ออกมาทุกกี่วินาที
+    map_update_interval: 2.0
+    # ต้องเดินไกลกี่เมตร ถึงจะเอาสแกนใหม่มาใช้
+    minimum_travel_distance: 0.03
+    # หรือต้องหันกี่เรเดียน ถึงจะเอาสแกนใหม่มาใช้
+    minimum_travel_heading: 0.3

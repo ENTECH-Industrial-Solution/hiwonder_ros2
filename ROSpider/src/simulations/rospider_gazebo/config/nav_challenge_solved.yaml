@@ -1,0 +1,10 @@
+# เฉลยโจทย์ Nav2 (สำหรับวิทยากร)
+# ros2 launch rospider_gazebo nav_challenge.launch.py params:=<path ของไฟล์นี้>
+/**:
+  ros__parameters:
+    xy_goal_tolerance: 0.05
+    yaw_goal_tolerance: 0.1
+    robot_radius: 0.12
+    inflation_radius: 0.12
+    max_vel_x: 0.15
+    max_vel_theta: 0.25
