@@ -18,6 +18,21 @@ from rospider_gazebo.slam_check import Level
 COURSE_LIMIT = 300.0    # sim seconds for the whole course; the checker stops once it is passed
 PLAN_TIMEOUT = 15.0     # wall seconds to wait for the planner's answer
 
+
+def send_with_retry(send, wait, tries=3, timeout=10.0):
+    """Send an action goal; if its response is lost, send it again.
+
+    On Jazzy a server sometimes accepts a goal but its response never arrives ("Failed to send
+    goal response (timeout)", seen in a V-SLAM run): waiting once would report 'rejected' while
+    the robot drives off. Nav2 replaces the first goal with the resent one. A response that
+    arrives, accepted or not, is returned as it is; None after `tries` lost responses.
+    """
+    for _ in range(tries):
+        handle = wait(send(), timeout)
+        if handle is not None:
+            return handle
+    return None
+
 #: (name, Thai label, (x, y) in the map frame = world frame, timeout in sim seconds).
 #: The robot spawns at the origin.
 COURSE = (

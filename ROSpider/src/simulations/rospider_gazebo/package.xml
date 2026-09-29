@@ -44,6 +44,7 @@
   <exec_depend>lifecycle_msgs</exec_depend>
   <exec_depend>rtabmap_sync</exec_depend>
   <exec_depend>rtabmap_slam</exec_depend>
+  <exec_depend>rtabmap</exec_depend>
   <exec_depend>rtabmap_rviz_plugins</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>

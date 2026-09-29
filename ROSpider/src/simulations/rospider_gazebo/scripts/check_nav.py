@@ -90,7 +90,8 @@ class Checker:
         """'ok', 'no_path', or 'rejected' when the planner refused the request itself."""
         goal = ComputePathToPose.Goal()
         goal.goal = self.pose(x, y)
-        handle = self.wait(self.plan.send_goal_async(goal), nav_check.PLAN_TIMEOUT)
+        handle = nav_check.send_with_retry(lambda: self.plan.send_goal_async(goal), self.wait,
+                                           timeout=nav_check.PLAN_TIMEOUT)
         if handle is None or not handle.accepted:
             return 'rejected'
         answer = self.wait(handle.get_result_async(), nav_check.PLAN_TIMEOUT)
@@ -107,8 +108,11 @@ class Checker:
         goal = NavigateToPose.Goal()
         goal.pose = self.pose(x, y)
         start = self.sim_now()
-        self.pending = self.nav.send_goal_async(goal)
-        self.handle = self.wait(self.pending, 10.0)
+
+        def send():
+            self.pending = self.nav.send_goal_async(goal)
+            return self.pending
+        self.handle = nav_check.send_with_retry(send, self.wait)
         self.pending = None
         if self.handle is None or not self.handle.accepted:
             return GoalResult(name, 'rejected', 0.0)
@@ -146,7 +150,7 @@ def main():
           'หุ่นจะได้เริ่มที่จุดเกิดและเวลาเทียบกันได้')
     try:
         if not checker.ready():
-            print('ไม่พบ Nav2 - เปิด ros2 launch rospider_gazebo nav_challenge.launch.py '
+            print('ไม่พบ Nav2 - เปิด launch ของโจทย์ (nav_challenge หรือ vslam_nav_challenge) '
                   'แล้วรอให้ RViz ขึ้นแผนที่ก่อน')
             return 1
         if not checker.active():

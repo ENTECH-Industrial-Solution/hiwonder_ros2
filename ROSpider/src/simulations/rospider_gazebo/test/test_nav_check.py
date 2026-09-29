@@ -78,3 +78,25 @@ def test_hints_name_no_parameter():
         text = nav_check.format_report(nav_check.evaluate(results))
         for key in ('xy_goal_tolerance', 'robot_radius', 'max_vel_x', 'inflation_radius'):
             assert key not in text
+
+
+def test_lost_goal_response_is_resent():
+    sent = []
+    answers = iter([None, None, 'handle'])
+    handle = nav_check.send_with_retry(lambda: sent.append(1) or len(sent),
+                                       lambda future, timeout: next(answers))
+    assert handle == 'handle' and len(sent) == 3
+
+
+def test_three_lost_responses_give_up():
+    sent = []
+    assert nav_check.send_with_retry(lambda: sent.append(1), lambda f, t: None) is None
+    assert len(sent) == 3
+
+
+def test_a_refusal_is_not_resent():
+    class Refused:
+        accepted = False
+    sent = []
+    handle = nav_check.send_with_retry(lambda: sent.append(1), lambda f, t: Refused())
+    assert handle.accepted is False and len(sent) == 1

@@ -9,6 +9,7 @@ install(DIRECTORY config launch maps models rviz urdf worlds
 
 install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_place.py
                  scripts/apriltag_detect.py scripts/yolo_detect.py scripts/check_slam.py scripts/check_nav.py
+                 scripts/check_vslam.py
                  scripts/lifecycle_activate.py
   DESTINATION lib/${PROJECT_NAME})
 
@@ -66,6 +67,14 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_nav_params test/test_nav_params.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_nav_check test/test_nav_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_slam_challenge_world test/test_slam_challenge_world.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_vslam_params test/test_vslam_params.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_vslam_check test/test_vslam_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_check_vslam test/test_check_vslam.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 

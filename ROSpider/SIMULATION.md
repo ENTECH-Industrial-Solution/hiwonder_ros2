@@ -155,7 +155,33 @@ ros2 launch rospider_gazebo rtabmap_slam.launch.py map:=room1         # ใช�
    ros2 launch rospider_gazebo vslam.launch.py localization:=true map:=room_vslam
    ```
 
-ข้อควรระวัง: การรันโหมดทำแผนที่ด้วยชื่อเดิมจะเขียนทับไฟล์เดิม
+ข้อควรระวัง: การรันโหมดทำแผนที่ด้วยชื่อเดิมจะเขียนทับไฟล์เดิม (โหมดนำทางใช้สำเนาของแผนที่ ไฟล์เดิมไม่ถูกแก้)
+
+**โจทย์ V-SLAM: สร้างแผนที่ด้วยกล้อง** (15–20 นาที)
+
+ใช้ห้องโจทย์เดิม (ผนังแต่ละด้านมีลายไม่ซ้ำกัน กล้องจะได้จำที่ได้) ค่าในไฟล์โจทย์ตั้งผิดไว้ 3 จาก 5 ค่า
+
+```bash
+ros2 launch rospider_gazebo vslam_challenge.launch.py map:=myvslam
+```
+
+1. แก้ค่าใน `src/simulations/rospider_gazebo/config/vslam_challenge.yaml` แล้วปิด-เปิด launch ใหม่
+2. ขับด้วย teleop ให้ทั่วทั้งสองห้อง แล้วกลับมาที่จุดเริ่มและหันไปทางเดิม (หุ่นต้องกลับมาเห็นภาพเดิมถึงจะเกิด loop closure)
+3. กด **Ctrl+C** รอจนปิดเสร็จ แผนที่ถูกบันทึกตอนนี้
+4. ตรวจ: `ros2 run rospider_gazebo check_vslam.py myvslam`
+
+ด่าน: 1 มีแผนที่และเห็นผนัง · 2 สำรวจครอบคลุม ≥ 90% · 3 แผนที่ไม่เบี้ยว (จำที่เดิมได้ ไม่จำผิดที่ ผนังไม่ซ้อน)
+
+**โจทย์นำทางด้วย V-SLAM** (10 นาที) ใช้แผนที่ของตัวเองจากโจทย์ข้างบน ค่าตั้งผิดไว้ 2 จาก 6 ค่า เส้นทางและตัวตรวจเดียวกับโจทย์ Nav2
+
+```bash
+ros2 launch rospider_gazebo vslam_nav_challenge.launch.py map:=myvslam
+ros2 run rospider_gazebo check_nav.py
+```
+
+แก้ค่าใน `src/simulations/rospider_gazebo/config/vslam_nav_challenge.yaml` หุ่นต้องเริ่มที่จุดเดียวกับตอนเริ่มทำแผนที่ (จุดเกิด)
+
+วิทยากร: แผนที่เฉลยสร้างด้วย `vslam_challenge.launch.py map:=vslam_answer params:=<path ของ config/vslam_challenge_solved.yaml>` แล้วรัน `python3 src/simulations/rospider_gazebo/tools/drive_route.py` (ขับเส้นทางเดิมให้เองประมาณ 5 นาที) ไฟล์เฉลยของโจทย์นำทางคือ `config/vslam_nav_challenge_solved.yaml`
 
 ### Color Threshold Adjustment
 
