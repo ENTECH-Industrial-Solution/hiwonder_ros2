@@ -164,3 +164,19 @@ def test_clear_zeroes_the_outputs():
     control.update(600, 50, now=1.0)
     control.clear()
     assert (control.pid_yaw.output, control.pid_dist.output) == (0.0, 0.0)
+
+
+def test_speed_and_turn_limits_are_settable():
+    control = FollowControl(max_speed=0.12, max_turn=0.3)
+    control.pid_yaw.last_time = control.pid_dist.last_time = 0.0
+    linear, angular = control.update(600, 50, now=1.0)
+    assert linear == pytest.approx(0.12)
+    assert angular == pytest.approx(-0.3)
+
+
+def test_a_slow_limit_also_caps_the_final_approach():
+    control = FollowControl(max_speed=0.005)
+    control.pid_yaw.last_time = control.pid_dist.last_time = 0.0
+    x_stop, y_stop = color_picker.STOP_POINT
+    linear, _angular = control.update(x_stop, y_stop - 45, now=1.0)
+    assert linear == pytest.approx(0.005)

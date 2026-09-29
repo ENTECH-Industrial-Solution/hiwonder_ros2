@@ -19,6 +19,7 @@ behaviours enabled; run only one of the two.
 """
 
 from interfaces.msg import ApriltagsInfo
+from std_srvs.srv import SetBool
 from rospider_gazebo import vision_demo
 from rospider_gazebo.pid import PID, set_range
 from rospider_gazebo.vision_demo import VisionDemo
@@ -46,6 +47,10 @@ class AprilTagTrackNode(VisionDemo):
         self.stop_distance = float(self.param('stop_distance', 0.5))
         self.speed_limit = float(self.param('speed_limit', 0.05))
         self.turn_limit = float(self.param('turn_limit', 0.2))
+        # start: false waits for ~/set_running true (the AprilTag exercise's checker starts
+        # the walk, so it sees it from the first step); the demo starts at once.
+        self.following = bool(self.param('start', True))
+        self.create_service(SetBool, '~/set_running', self.set_running_callback)
         self.pid_yaw = PID(0.005, 0.0, 0.000001)
         self.pid_distance = PID(0.5, 0.0, 0.0)
         self.tag = None
@@ -60,13 +65,23 @@ class AprilTagTrackNode(VisionDemo):
             f'following tag {self.target_tag}, stopping {self.stop_distance} m '
             'short; start apriltag_detect.py as well')
 
+    def set_running_callback(self, request, response):
+        self.following = request.data
+        if not self.following:
+            self.stop()
+            self.pid_yaw.clear()
+            self.pid_distance.clear()
+        response.success = True
+        response.message = 'set_running'
+        return response
+
     def tags_callback(self, message):
         self.tag = next((t for t in message.data if t.id == self.target_tag),
                         None)
 
     def process(self, frame):
         width = frame.shape[1]
-        if self.tag is None:
+        if self.tag is None or not self.following:
             self.stop()
             self.pid_yaw.clear()
             self.pid_distance.clear()

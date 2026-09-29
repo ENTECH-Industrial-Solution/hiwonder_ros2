@@ -1,0 +1,20 @@
+# เฉลยโจทย์ Color Threshold (สำหรับวิทยากร) = ช่วงสีเดียวกับ config/color_detect.yaml
+# ros2 run rospider_gazebo check_color.py --params <path ของไฟล์นี้>
+color_detect:
+  ros__parameters:
+    min_area_px: 300
+    kernel_px: 5
+    colors: ['red', 'green', 'blue']
+    detect_type: circle
+    tune: true
+    tuned_path: '~/.ros/color_challenge_solved_tuned.json'
+    # ช่วงสีแต่ละสี: [L, A, B] ต่ำสุด (min) และสูงสุด (max) ค่าละ 0-255
+    red:
+      min: [0, 150, 130]
+      max: [255, 255, 255]
+    green:
+      min: [0, 0, 130]
+      max: [255, 110, 255]
+    blue:
+      min: [0, 130, 0]
+      max: [255, 255, 100]

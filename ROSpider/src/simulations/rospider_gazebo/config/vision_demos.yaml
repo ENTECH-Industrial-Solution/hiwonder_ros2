@@ -27,6 +27,9 @@ object_tracking:
     threshold: 0.5           # LAB band half-width: 50*threshold on a/b, twice on L
     start: true              # false: wait for ~/set_running true, as upstream
     pick_repeat: 10          # frames a click's colour is averaged over
+    max_speed: 0.05          # m/s, upstream's walking limit
+    max_turn: 0.1            # rad/s, upstream's turning limit
+    stop_y: 300              # px: the robot stops once the target sits this far down the frame (the yellow dot)
 
 line_following:
   ros__parameters:

@@ -57,7 +57,10 @@ class LineFollowingNode(VisionDemo):
         self.threshold = float(self.param('threshold', 0.5))
         self.following = bool(self.param('start', True))
         self.repeat = int(self.param('pick_repeat', PICK_REPEAT))
-        self.control = LineControl()
+        # Upstream's constants unless given (the Line Following exercise hands them out)
+        self.control = LineControl(kp=float(self.param('kp', 1.1)),
+                                   speed=float(self.param('speed', 0.05)),
+                                   max_turn=float(self.param('max_turn', 0.35)))
         self.guard = ObstacleStop(float(self.param('stop_threshold', 0.4)))
         self.picker = None
         self.target = None          # (lab, bgr) once picked

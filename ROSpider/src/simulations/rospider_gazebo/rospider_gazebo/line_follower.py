@@ -79,10 +79,14 @@ def find_line(frame, lower, upper, rois=ROIS):
 class LineControl:
     """Upstream's steering: PID(1.1) on the deflection angle, a fifth of
     its output as the turn rate within +-0.35 rad/s, walking at 0.05 m/s
-    -- and standing still when the PID has nothing to say."""
+    -- and standing still when the PID has nothing to say. The three
+    numbers are parameters (upstream's are the defaults) so the Line
+    Following exercise can hand them to the participant."""
 
-    def __init__(self):
-        self.pid = PID(1.1, 0.0, 0.0)
+    def __init__(self, kp=1.1, speed=0.05, max_turn=0.35):
+        self.pid = PID(kp, 0.0, 0.0)
+        self.speed = speed
+        self.max_turn = max_turn
 
     def clear(self):
         self.pid.clear()
@@ -91,8 +95,8 @@ class LineControl:
         """(linear_x, angular_z) for a deflection angle in radians."""
         self.pid.update(angle, now)
         output = self.pid.output
-        angular = set_range(-output / 5, -0.35, 0.35)
-        linear = 0.05 if output else 0.0
+        angular = set_range(-output / 5, -self.max_turn, self.max_turn)
+        linear = self.speed if output else 0.0
         return float(linear), float(angular)
 
 

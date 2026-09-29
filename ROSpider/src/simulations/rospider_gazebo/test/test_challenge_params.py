@@ -107,3 +107,32 @@ def test_shipped_template_and_answer_key_merge_cleanly():
         user = os.path.join(package, 'config', name)
         challenge_params.merge(challenge_params.load_params(base),
                                challenge_params.load_params(user), user)
+
+
+LISTS = {'roi': [50, 350, 150, 500], 'shapes': ['sphere', 'cuboid'], 'gains': [1.0, 2.0]}
+
+
+def test_list_keeps_its_element_type():
+    merged = challenge_params.merge(LISTS, {'roi': [0, 300, 100, 600], 'gains': [3, 4.5],
+                                            'shapes': ['cylinder']}, 'f.yaml')
+    assert merged['roi'] == [0, 300, 100, 600]
+    assert merged['gains'] == [3.0, 4.5] and all(isinstance(v, float) for v in merged['gains'])
+    assert merged['shapes'] == ['cylinder']
+
+
+def test_single_value_for_a_list_is_refused():
+    with pytest.raises(ChallengeConfigError, match='shapes'):
+        challenge_params.merge(LISTS, {'shapes': 'sphere'}, 'f.yaml')
+
+
+def test_wrong_element_type_in_a_list_is_refused():
+    with pytest.raises(ChallengeConfigError, match='roi'):
+        challenge_params.merge(LISTS, {'roi': [0, 300, 100.5, 600]}, 'f.yaml')
+    with pytest.raises(ChallengeConfigError, match='shapes'):
+        challenge_params.merge(LISTS, {'shapes': ['sphere', 3]}, 'f.yaml')
+
+
+def test_empty_list_is_refused():
+    """rclpy cannot declare a parameter from an empty YAML list."""
+    with pytest.raises(ChallengeConfigError, match='shapes'):
+        challenge_params.merge(LISTS, {'shapes': []}, 'f.yaml')

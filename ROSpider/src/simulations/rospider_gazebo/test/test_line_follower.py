@@ -151,3 +151,17 @@ def test_reading_zero_is_no_reading():
     """Upstream drops zeros: the driver reports a miss as 0."""
     stop = ObstacleStop()
     assert stop.update(*_scan(front=0.0)) is False
+
+
+def test_line_control_takes_gain_speed_and_turn_limit():
+    control = LineControl(kp=2.2, speed=0.1, max_turn=0.2)
+    linear, angular = control.update(0.6)
+    assert linear == pytest.approx(0.1)
+    assert angular == pytest.approx(0.2)           # 2.2 * 0.6 / 5 = 0.264, clamped to 0.2
+    control = LineControl(kp=2.2, speed=0.1, max_turn=0.5)
+    assert control.update(0.3)[1] == pytest.approx(2.2 * 0.3 / 5)
+
+
+def test_line_control_defaults_are_upstreams():
+    default, upstream = LineControl(), LineControl(kp=1.1, speed=0.05, max_turn=0.35)
+    assert default.update(0.4) == upstream.update(0.4)

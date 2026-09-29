@@ -196,6 +196,17 @@ ros2 launch rospider_gazebo lab_tool.launch.py       # terminal 2: เปิด�
 2. เลื่อน slider `L` `A` `B` จนช่อง mask เห็นแค่วัตถุ
 3. กด **Save** ค่าจะถูกเก็บที่ `~/.ros/color_detect_tuned.json` และ terminal จะพิมพ์บล็อก YAML ไว้ให้วางลงใน `config/color_detect.yaml`
 
+**โจทย์: จูนสีให้เจอแค่กล่องที่ต้องการ** (10 นาที)
+
+ฉากมีกล่องแดง เขียว น้ำเงิน กล่องน้ำเงินอีกกล่องอยู่ในเงา และกล่องสีส้มที่คล้ายสีแดง ช่วงสีที่ให้มาตั้งผิดไว้ทั้ง 3 สี
+
+```bash
+ros2 launch rospider_gazebo color_challenge.launch.py   # เปิดฉาก + หน้าต่าง LAB_Tool
+ros2 run rospider_gazebo check_color.py                 # ตรวจจากภาพกล้อง บอกผลทีละด่าน
+```
+
+จูนใน LAB_Tool แล้วรันตัวตรวจได้เลยไม่ต้องปิด launch (ตัวตรวจใช้ค่าที่หน้าต่างแสดงอยู่ตอนนั้น) อย่าลืมกด **Save** (เก็บที่ `~/.ros/color_challenge_tuned.json` ทับค่าในไฟล์โจทย์ `config/color_challenge.yaml`) ไม่งั้นปิด launch แล้วค่าหาย ห้ามขับหุ่นระหว่างทำโจทย์ ตัวตรวจจะไม่ยอมตรวจถ้ากล้องไม่ได้เห็นฉากตามตำแหน่งเริ่มต้น — ด่าน: 1 เจอครบทุกสี · 2 ไม่จับของหลอก · 3 เจอแม้อยู่ในเงา — อยากเริ่มใหม่: ลบ `~/.ros/color_challenge_tuned.json` แล้วปิด-เปิด launch ใหม่
+
 ### Color Tracking
 
 คลิกที่วัตถุในภาพ แล้วหุ่นจะเดินตามก้อนสีนั้น
@@ -207,6 +218,17 @@ ros2 launch rospider_gazebo object_tracking.launch.py   # terminal 2
 
 คลิกซ้ายที่วัตถุในหน้าต่าง `image` หุ่นจะเก็บสีใต้เมาส์ แล้วเดินตามให้วัตถุอยู่ที่จุดสีเหลือง ถ้าจับสีได้กว้างหรือแคบเกินไป ให้ปรับด้วย `threshold:=0.3`
 
+**โจทย์: เดินไปหยุดหน้าลูกบอลสีแดง** (10 นาที)
+
+ฉากมีลูกบอลสีแดง (ต้องไปหา) กับลูกบอลสีส้ม (ห้ามไปหา) หุ่นต้องหยุดตรงหน้าลูกบอลแดงที่ระยะ 0.43–0.52 ม. ภายใน 40 วินาที ค่าตั้งผิดไว้ 3 จาก 4 ค่า
+
+```bash
+ros2 launch rospider_gazebo track_challenge.launch.py   # ฉาก + หน้าต่าง image (หุ่นยังไม่เดิน)
+ros2 run rospider_gazebo check_track.py                 # ตัวตรวจคลิกเลือกสีลูกบอลแดงและสั่งเดินให้เอง
+```
+
+แก้ค่าใน `src/simulations/rospider_gazebo/config/track_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (คลิกในหน้าต่างเพื่อดูว่าสีจับอะไรได้ แต่หุ่นจะไม่เดินจนกว่าตัวตรวจสั่ง) — ด่าน: 1 เดินไปหาลูกบอลสีแดง · 2 หยุดหน้าลูกบอลพอดี · 3 ทันเวลา
+
 ### AprilTag Tag Tracking
 
 หุ่นเดินเข้าหาป้าย AprilTag ที่เลือก แล้วหยุดที่ระยะที่ตั้งไว้ ในห้อง sim มีป้ายหมายเลข 1 ติดไว้ให้แล้ว
@@ -215,6 +237,17 @@ ros2 launch rospider_gazebo object_tracking.launch.py   # terminal 2
 ros2 launch rospider_gazebo gazebo.launch.py                                  # terminal 1
 ros2 launch rospider_gazebo apriltag_track.launch.py target_tag:=1 stop_distance:=0.35   # terminal 2
 ```
+
+**โจทย์: เดินไปหยุดหน้าป้ายหมายเลข 2** (10 นาที)
+
+ฉากมีป้าย 3 ป้าย หุ่นต้องเดินไปหยุดหน้าป้ายหมายเลข 2 ในระยะที่แขนหยิบของบนแท่นได้ (กล้องห่างป้ายประมาณ 0.30–0.40 ม.) ภายใน 40 วินาที ค่าตั้งผิดไว้ 3 จาก 4 ค่า
+
+```bash
+ros2 launch rospider_gazebo apriltag_challenge.launch.py   # ฉาก + หน้าต่าง image (หุ่นยังไม่เดิน)
+ros2 run rospider_gazebo check_tag.py                      # ตัวตรวจสั่งเดินเองแล้วบอกผลทีละด่าน
+```
+
+แก้ค่าใน `src/simulations/rospider_gazebo/config/apriltag_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง — ด่าน: 1 ไปหาป้ายหมายเลข 2 · 2 หยุดระยะพอดี · 3 ทันเวลา
 
 ### Autonomous Line Following
 
@@ -225,6 +258,17 @@ ros2 launch rospider_gazebo line_following.launch.py
 ```
 
 คลิกซ้ายที่เส้นในหน้าต่าง `image` แล้วหุ่นจะเริ่มเดิน ถ้ามีสิ่งกีดขวางอยู่ใกล้กว่า 0.4 ม. หุ่นจะหยุดรอ วิ่งครบหนึ่งรอบใช้เวลาประมาณ 2 นาที
+
+**โจทย์: ให้หุ่นเกาะเส้นครบรอบทันเวลา** (10 นาที)
+
+ค่าของตัวเกาะเส้นตั้งผิดไว้ 2 จาก 4 ค่า แก้จนหุ่นวิ่งครบรอบภายใน 200 วินาที
+
+```bash
+ros2 launch rospider_gazebo line_challenge.launch.py   # ฉากเส้น + หน้าต่าง image
+ros2 run rospider_gazebo check_line.py                 # ตัวตรวจเลือกสีเส้นและสั่งวิ่งให้เอง
+```
+
+แก้ค่าใน `src/simulations/rospider_gazebo/config/line_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (หุ่นต้องเริ่มที่จุดเกิดบนเส้น) — ด่าน: 1 เกาะเส้นได้ 1/4 รอบ · 2 วิ่งครบรอบ · 3 ครบรอบทันเวลา
 
 ### 3D Vision: Object Grasping
 
@@ -240,6 +284,17 @@ ros2 launch rospider_gazebo track_and_grab.launch.py
 - **place: auto**: วางลงข้างตัวทันทีที่หยิบได้
 - **place: by button**: ถือไว้จนกว่าจะกดปุ่ม **Place**
 
+**โจทย์: หยิบบล็อกสีน้ำเงินไปวางบนแผ่นสีเหลือง** (15 นาที)
+
+บล็อกสีน้ำเงินอยู่บนแท่นทางขวาของหุ่น ไกลเกินแขนเอื้อม หุ่นต้องเดินไปหยิบ แล้ววางลงบนแผ่นสีเหลืองที่พื้น ค่าตั้งผิดไว้ทั้ง 3 ค่า
+
+```bash
+ros2 launch rospider_gazebo grasp_challenge.launch.py   # ฉาก + หน้าต่าง track_and_grab
+ros2 run rospider_gazebo check_grasp.py                 # ตัวตรวจสั่งหยิบบล็อกสีน้ำเงินให้เอง (ราว 1 นาที)
+```
+
+แก้ค่าใน `src/simulations/rospider_gazebo/config/grasp_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (หุ่นและบล็อกต้องอยู่ที่เดิม) — ด่าน: 1 เดินไปถึงบล็อก · 2 หยิบขึ้นมา · 3 วางบนแผ่นสีเหลือง
+
 ### 3D Vision: Shape Recognition
 
 ใช้ภาพ depth แยกรูปทรงของวัตถุ (ทรงกลม ทรงกระบอก กล่อง) และบอกสี ใน sim ทำได้แค่ตรวจจับและรายงานผล ยังไม่หยิบไปแยกใส่ถาด
@@ -250,6 +305,17 @@ ros2 launch rospider_gazebo object_classification.launch.py           # terminal
 ```
 
 ถ้าตรวจไม่เจอ ให้วัดระยะพื้นหนึ่งครั้งด้วย `debug:=true` แล้วนำค่าที่ log บอกไปใส่ใน `plane_distance:=...` (หน่วยเป็นมิลลิเมตร)
+
+**โจทย์: ให้หุ่นหาลูกบอลให้เจอ** (10 นาที)
+
+บนพื้นใต้กล้องมีลูกบอล (ทรงกลม) กล่อง และทรงกระบอก หุ่นต้องแยกวัตถุออกจากพื้น เห็นครบทั้ง 3 ชิ้นพร้อมเรียกชื่อรูปทรงถูก แล้วเลือกลูกบอล (กรอบสีแดงในหน้าต่าง `depth`) ค่าตั้งผิดไว้ทั้ง 3 ค่า
+
+```bash
+ros2 launch rospider_gazebo shape_challenge.launch.py   # ฉาก + หน้าต่าง depth
+ros2 run rospider_gazebo check_shape.py                 # ตรวจจากผลที่หุ่นรายงาน บอกผลทีละด่าน
+```
+
+แก้ค่าใน `src/simulations/rospider_gazebo/config/shape_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (หุ่นไม่ต้องเดิน) — ด่าน: 1 แยกวัตถุออกจากพื้น · 2 เห็นครบและเรียกชื่อถูก · 3 เลือกลูกบอล
 
 ## ปัญหาที่พบบ่อย
 

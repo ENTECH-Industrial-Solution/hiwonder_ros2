@@ -115,10 +115,16 @@ def find_blob(frame, lower, upper, last=None):
 
 class FollowControl:
     """Upstream ObjectTracker's two PIDs: the target's y sets the forward
-    speed (higher in the frame = farther away), its x the turn rate."""
+    speed (higher in the frame = farther away), its x the turn rate.
 
-    def __init__(self, stop_point=STOP_POINT):
+    `max_speed` (m/s) and `max_turn` (rad/s) are upstream's output limits,
+    0.05 and 0.1, settable for the Color Tracking exercise; the final
+    approach keeps upstream's 0.01 cap, or `max_speed` when that is lower."""
+
+    def __init__(self, stop_point=STOP_POINT, max_speed=0.05, max_turn=0.1):
         self.x_stop, self.y_stop = stop_point
+        self.max_speed = max_speed
+        self.max_turn = max_turn
         self.pid_yaw = PID(0.009, 0.0, 0.001)
         self.pid_dist = PID(0.002, 0.0, 0.0)
 
@@ -137,17 +143,18 @@ class FollowControl:
         dy = y - self.y_stop
         if abs(dy) > 60:
             self.pid_dist.update(dy, now)
-            linear = set_range(self.pid_dist.output, -0.05, 0.05)
+            linear = set_range(self.pid_dist.output, -self.max_speed, self.max_speed)
         elif abs(dy) > 30:
             self.pid_dist.update(dy, now)
-            linear = set_range(self.pid_dist.output, -0.01, 0.01)
+            slow = min(0.01, self.max_speed)
+            linear = set_range(self.pid_dist.output, -slow, slow)
         else:
             self.pid_dist.clear()
 
         dx = x - self.x_stop
         if abs(dx) > 40:
             self.pid_yaw.update(dx, now)
-            angular = set_range(self.pid_yaw.output, -0.1, 0.1)
+            angular = set_range(self.pid_yaw.output, -self.max_turn, self.max_turn)
         else:
             self.pid_yaw.clear()
         return float(linear), float(angular)

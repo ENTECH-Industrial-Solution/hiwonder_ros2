@@ -63,6 +63,9 @@ def merge(base, override, source):
     return merged
 
 
+_KINDS = {bool: ' true/false', float: 'ตัวเลข', int: 'จำนวนเต็ม', str: 'ข้อความ'}
+
+
 def _typed(key, value, default, source):
     """`value` as the type of Hiwonder's `default`: rclcpp aborts the node on
     a type mismatch, and an empty value (YAML null) is never a valid one."""
@@ -70,6 +73,14 @@ def _typed(key, value, default, source):
         raise ChallengeConfigError(f"{source}: '{key}' ต้องเป็น{expected} แต่ได้ {value!r}")
 
     is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if isinstance(default, list):
+        # Each element as the default's first; an empty list cannot be declared by rclpy.
+        if not isinstance(value, list) or not value:
+            refuse(' list ในวงเล็บ [ ] อย่างน้อยหนึ่งค่า')
+        try:
+            return [_typed(key, item, default[0], source) for item in value]
+        except ChallengeConfigError:
+            refuse(f' list ของ{_KINDS[type(default[0])]}')
     if isinstance(default, bool):
         if not isinstance(value, bool):
             refuse(' true หรือ false')

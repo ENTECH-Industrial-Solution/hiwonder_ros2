@@ -30,7 +30,9 @@ from interfaces.msg import ObjectInfo, ObjectsInfo
 from rclpy.node import Node
 from rospider_gazebo import lab_settings, tkview
 from rospider_gazebo.ros_image import to_image_msg
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 
 #: Hiwonder's overlay colours (driver/sdk/sdk/common.py range_rgb), BGR.
 RANGE_RGB = {'red': (0, 50, 255), 'green': (50, 255, 0), 'blue': (255, 50, 0)}
@@ -103,6 +105,10 @@ class ColorDetectNode(Node):
                              f'not {self.detect_type!r}')
 
         self._lock = threading.Lock()
+        # The bands in use, as JSON, latched: check_color.py scores what the window shows,
+        # slider moves not yet saved included.
+        self.settings_pub = self.create_publisher(
+            String, '~/settings', QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.baseline = self._settings_from_params()
         self.settings = self.baseline
         self._apply(self.baseline)
@@ -160,6 +166,7 @@ class ColorDetectNode(Node):
             self.kernel_px = max(1, int(settings['kernel_px']) | 1)
             self.kernel = cv2.getStructuringElement(
                 cv2.MORPH_RECT, (self.kernel_px, self.kernel_px))
+        self.settings_pub.publish(String(data=json.dumps(settings)))
 
     def apply_settings(self, settings):
         """Validate then adopt; raises ValueError/KeyError on bad input."""

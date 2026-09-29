@@ -53,7 +53,10 @@ class ObjectTrackingNode(VisionDemo):
         self.threshold = float(self.param('threshold', 0.5))
         self.tracking = bool(self.param('start', True))
         self.repeat = int(self.param('pick_repeat', PICK_REPEAT))
-        self.control = FollowControl()
+        self.stop_point = (STOP_POINT[0], int(self.param('stop_y', STOP_POINT[1])))
+        self.control = FollowControl(self.stop_point,
+                                     max_speed=float(self.param('max_speed', 0.05)),
+                                     max_turn=float(self.param('max_turn', 0.1)))
         self.picker = None
         self.target = None          # (lab, bgr) once picked
         self.band = None
@@ -181,7 +184,7 @@ class ObjectTrackingNode(VisionDemo):
                 self.stop()
             return frame
         x, y, r = blob
-        cv2.circle(frame, STOP_POINT, 15, YELLOW, -1)
+        cv2.circle(frame, self.stop_point, 15, YELLOW, -1)
         cv2.circle(frame, (int(x), int(y)), int(r), self.target[1], 2)
         linear, angular = self.control.update(x, y)
         if self.tracking:

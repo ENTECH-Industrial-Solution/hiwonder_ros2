@@ -19,6 +19,9 @@ Arguments:
                 written for.
   show          false runs headless, publishing only <demo>/image_result
   use_sim_time  false for a camera-only demo with no simulator running
+  params_file   an extra parameters file over config/vision_demos.yaml, for
+                the list-valued keys a launch argument cannot carry (the
+                exercises write one)
 
 Anything else on the command line that matches a demo's own parameter --
 debug, plane_distance, target_tag, color, walk, ... -- is
@@ -53,7 +56,7 @@ OVERRIDES = (
     'debug', 'plane_distance', 'pan_gain', 'tilt_gain', 'flip', 'start',
     'place_point', 'threshold', 'pick_repeat', 'stop_threshold',
     'scan_topic', 'gui', 'walk', 'auto_place', 'target_x', 'tolerance',
-    'lost_timeout',
+    'lost_timeout', 'kp', 'speed', 'max_turn', 'max_speed', 'stop_y',
 )
 
 
@@ -99,13 +102,16 @@ def launch_setup(context, *args, **kwargs):
         # node draws its overlay on its own topic instead.
         overrides['image_topic'] = '/yolo_detect/image_result'
 
+    parameters = [os.path.join(pkg, 'config', 'vision_demos.yaml')]
+    params_file = LaunchConfiguration('params_file').perform(context)
+    if params_file:
+        parameters.append(params_file)
     nodes = [Node(
         package='rospider_gazebo',
         executable=f'{demo}.py',
         name=demo,
         output='screen',
-        parameters=[os.path.join(pkg, 'config', 'vision_demos.yaml'),
-                    overrides],
+        parameters=parameters + [overrides],
     )]
 
     if detector == 'color':
@@ -150,6 +156,8 @@ def generate_launch_description():
                               description='false: headless, publish only'),
         DeclareLaunchArgument('use_sim_time', default_value='true',
                               description='false with no simulator running'),
+        DeclareLaunchArgument('params_file', default_value='',
+                              description='extra parameters file over vision_demos.yaml'),
     ]
     arguments += [DeclareLaunchArgument(name, default_value='')
                   for name in OVERRIDES]

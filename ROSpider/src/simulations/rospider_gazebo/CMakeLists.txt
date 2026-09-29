@@ -9,7 +9,9 @@ install(DIRECTORY config launch maps models rviz urdf worlds
 
 install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_place.py
                  scripts/apriltag_detect.py scripts/yolo_detect.py scripts/check_slam.py scripts/check_nav.py
-                 scripts/check_vslam.py
+                 scripts/check_vslam.py scripts/check_color.py scripts/check_line.py scripts/check_tag.py
+                 scripts/check_shape.py scripts/check_track.py
+                 scripts/check_grasp.py
                  scripts/lifecycle_activate.py
   DESTINATION lib/${PROJECT_NAME})
 
@@ -75,6 +77,18 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_vslam_check test/test_vslam_check.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_check_vslam test/test_check_vslam.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_color_check test/test_color_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_line_check test/test_line_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_tag_check test/test_tag_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_shape_check test/test_shape_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_track_check test/test_track_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_grasp_check test/test_grasp_check.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
