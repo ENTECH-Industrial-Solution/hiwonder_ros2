@@ -1,0 +1,8 @@
+# เฉลยภารกิจปิดท้าย (สำหรับวิทยากร): ros2 run rospider_gazebo check_mission.py <path ของไฟล์นี้>
+speed: 0.15
+steps:
+  - go_to: [3.8, 0.7, 90]
+  - go_to_tag: 3
+  - pick: blue
+  - go_to: [0.56, 0.55, 180]
+  - place: '0.16 0.0 0.035'

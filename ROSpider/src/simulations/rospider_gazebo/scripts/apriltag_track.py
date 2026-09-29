@@ -13,12 +13,15 @@ gain, the 0.2 rad/s ceiling -- is upstream's.
 
 This demo steers the robot. scripts/apriltag_detect.py can steer it too, with
 behaviours enabled; run only one of the two.
+Off (start:=false or ~/set_running false) it publishes nothing on /controller/cmd_vel, so Nav2 or
+track_and_grab can drive; target_tag can be changed at run time with `ros2 param set`.
 
     ros2 launch rospider_gazebo gazebo.launch.py
     ros2 launch rospider_gazebo vision_demo.launch.py demo:=apriltag_track target_tag:=1
 """
 
 from interfaces.msg import ApriltagsInfo
+from rcl_interfaces.msg import SetParametersResult
 from std_srvs.srv import SetBool
 from rospider_gazebo import vision_demo
 from rospider_gazebo.pid import PID, set_range
@@ -58,6 +61,7 @@ class AprilTagTrackNode(VisionDemo):
             ApriltagsInfo,
             str(self.param('tags_topic', '/apriltag_detect/apriltag_info')),
             self.tags_callback, 1)
+        self.add_on_set_parameters_callback(self._on_parameters)
 
     def on_start(self):
         self.servos.set_servo_position(1.0, LOOK_POSE)
@@ -71,9 +75,22 @@ class AprilTagTrackNode(VisionDemo):
             self.stop()
             self.pid_yaw.clear()
             self.pid_distance.clear()
+        else:
+            # Another node (track_and_grab, pick_and_place) may have moved the arm since start-up.
+            self.servos.set_servo_position(1.0, LOOK_POSE)
         response.success = True
         response.message = 'set_running'
         return response
+
+    def _on_parameters(self, parameters):
+        """target_tag may change at run time (check_mission.py's go_to_tag steps)."""
+        for parameter in parameters:
+            if parameter.name == 'target_tag':
+                self.target_tag = int(parameter.value)
+                self.tag = None
+                self.pid_yaw.clear()
+                self.pid_distance.clear()
+        return SetParametersResult(successful=True)
 
     def tags_callback(self, message):
         self.tag = next((t for t in message.data if t.id == self.target_tag),
@@ -81,7 +98,9 @@ class AprilTagTrackNode(VisionDemo):
 
     def process(self, frame):
         width = frame.shape[1]
-        if self.tag is None or not self.following:
+        if not self.following:
+            return frame                # off: /controller/cmd_vel belongs to someone else
+        if self.tag is None:
             self.stop()
             self.pid_yaw.clear()
             self.pid_distance.clear()
