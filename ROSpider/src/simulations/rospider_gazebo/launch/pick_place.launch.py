@@ -154,7 +154,7 @@ def generate_launch_description():
         DeclareLaunchArgument('auto_start', default_value='true'),
         DeclareLaunchArgument(
             'tune', default_value='false',
-            description='open the tuning window(s): HSV trackbars in '
+            description='open the tuning window(s): the LAB_Tool window of '
                         'color_detect, the Tk tuners in yolo_detect and '
                         'apriltag_detect'),
         DeclareLaunchArgument(

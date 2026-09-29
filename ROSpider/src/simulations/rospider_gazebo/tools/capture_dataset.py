@@ -5,7 +5,7 @@ Not installed and not part of any launch file. Start the simulation first,
 then run this from the package source tree:
 
     ros2 launch rospider_gazebo pick_place.launch.py auto_start:=false tags:=false
-    python3 tools/capture_dataset.py --samples 400 --out ~/datasets/cubes
+    python3 tools/capture_dataset.py --samples 50 --out ~/datasets/cubes
 
 The tool places the objects with Gazebo's own set_pose service and then READS
 BACK where they actually ended up. Trusting the commanded pose does not work:
@@ -17,8 +17,8 @@ confidently wrong model.
 
 The read-back goes through the gz CLI, not through config/gz_bridge.yaml. The
 bridge stays as it is: pose/info is a high-rate topic, this tool runs offline
-by hand, and SIMULATION.md already records what the camera bridge alone costs
-in CPU here.
+by hand, and the camera bridge alone already costs a noticeable share of a
+CPU core.
 
 Labels are geometric, not hand-drawn: the object's eight corners are projected
 through the live camera_info and the live TF, and the depth image is used to
@@ -44,18 +44,23 @@ import rclpy
 import rclpy.duration
 import tf2_ros
 from cv_bridge import CvBridge
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import CameraInfo, Image
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rospider_gazebo import labelling  # noqa: E402  (needs the sys.path above)
+from rospider_gazebo import arm_ik, labelling  # noqa: E402  (needs the sys.path above)
 
-# model name -> (class name, size in metres). The cubes pick_place.launch.py
-# spawns; change this to capture something else. The class names must also
-# appear in config/pick_place.yaml's `colors` for pick_and_place to accept
-# them.
+# pick_and_place's look_pose (config/pick_place.yaml): the arm pose from
+# which the picker actually detects, so the dataset is captured from the
+# same viewpoint the model is used from.
+LOOK_POSE = [0.0, 0.628, -1.927, -1.55, 0.0]
+
+# model name -> (class name, size in metres): the cubes pick_place.launch.py
+# spawns. The class names must also appear in the picker's `colors` for
+# pick_and_place to accept them.
 OBJECTS = {
     'pick_cube_red': ('red', (0.05, 0.05, 0.05)),
     'pick_cube_green': ('green', (0.05, 0.05, 0.05)),
@@ -220,6 +225,26 @@ class CaptureNode(Node):
     def _on_info(self, msg):
         self.camera_matrix = np.array(msg.k, dtype=np.float64).reshape(3, 3)
 
+    def look(self, seconds=3.0):
+        """Move the arm to the picker's look_pose and wait for it."""
+        pub = self.create_publisher(JointTrajectory,
+                                    '/arm_controller/joint_trajectory', 1)
+        msg = JointTrajectory()
+        msg.joint_names = list(arm_ik.JOINT_NAMES)
+        point = JointTrajectoryPoint()
+        point.positions = [float(v) for v in LOOK_POSE]
+        point.time_from_start.sec = 2
+        msg.points.append(point)
+        deadline = time.time() + 1.0        # let the publisher be discovered
+        while time.time() < deadline:
+            rclpy.spin_once(self, timeout_sec=0.1)
+        pub.publish(msg)
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            rclpy.spin_once(self, timeout_sec=0.1)
+        self.destroy_publisher(pub)
+        print('arm at look_pose')
+
     def wait_for_tf(self, timeout=30.0):
         """Spin until the camera can be resolved in the world frame.
 
@@ -325,9 +350,13 @@ def write_data_yaml(root, classes):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--samples', type=int, default=200)
+    # 50 is plenty for the simulator: 20 images at 100 epochs already reach
+    # mAP50 0.90 on the cubes (see tools/train_yolo.py). Hundreds only buy
+    # robustness against poses the small set happened to miss.
+    parser.add_argument('--samples', type=int, default=50)
     parser.add_argument('--out', required=True)
-    parser.add_argument('--world', default='rospider_room')
+    parser.add_argument('--world', default='rospider_room',
+                        help='Gazebo world name')
     parser.add_argument('--val-split', type=float, default=0.2)
     parser.add_argument('--min-area-px', type=float, default=300.0)
     parser.add_argument('--occlusion-tol', type=float, default=0.03)
@@ -345,6 +374,9 @@ def main():
     parser.add_argument('--max-stuck', type=int, default=5,
                         help='give up after this many samples in a row where '
                              'no object could be moved')
+    parser.add_argument('--no-look', action='store_true',
+                        help='leave the arm where it is instead of moving '
+                             "it to pick_and_place's look_pose first")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -360,6 +392,8 @@ def main():
     stuck = 0
     try:
         node.wait_for_tf()
+        if not args.no_look:
+            node.look()
         for index in range(args.samples):
             moved = sum(
                 set_pose(args.world,

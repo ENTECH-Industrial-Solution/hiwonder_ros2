@@ -13,39 +13,16 @@ of the object points below; changing it silently breaks pose solving.
 import cv2
 import numpy as np
 
+# The geometry lives in stations.py, which imports no cv2: a launch file
+# needs station_sdf(), and importing cv2 inside `ros2 launch` sets Qt's
+# plugin path for every child process, which crashes the Gazebo GUI.
+from rospider_gazebo.stations import (  # noqa: F401  (re-exported)
+    BOARD_FACE, BOARD_OFFSET_X, BOARD_THICKNESS, MARKER_CENTRE_HEIGHT,
+    MARKER_SIZE, PEDESTAL_SIZE, POST_SIZE, QUIET_MODULES, TAG_CENTRE_HEIGHT,
+    TAG_MODULES, TAG_SIZE, board_face, station_sdf, tag_to_pedestal_top)
+
 FAMILY = 'tag36h11'
 _DICT_ID = cv2.aruco.DICT_APRILTAG_36h11
-
-# A 36h11 marker is 10 modules across including its own black border.
-_TAG_MODULES = 10
-
-# Edge of the black square in metres, excluding the quiet zone. Must match the
-# physical board through BOARD_FACE below, or every distance solve_tag_pose
-# reports is wrong by the ratio between them.
-TAG_SIZE = 0.15
-
-# White margin around the marker, in modules. The detector needs light around
-# the tag and finds nothing at all without it -- the most common way a rendered
-# tag fails, and it fails silently.
-QUIET_MODULES = 2
-
-# The board carries the whole texture, marker plus quiet zone, so its face is
-# larger than the tag by exactly that ratio. Derived rather than chosen: a
-# hand-picked board size would make the black square some other size and put a
-# constant scale error into every pose.
-BOARD_FACE = TAG_SIZE * (_TAG_MODULES + 2 * QUIET_MODULES) / _TAG_MODULES
-
-# Station model, all in the model frame, which faces +x: a robot approaching
-# from +x sees the tag.
-#   - pedestal, identical to models/pick_pedestal so its top face is at
-#     z = 0.08 and pick_place.yaml's drop_slots z of 0.135 lands a cube on it
-#   - a post holding the board up
-#   - the board, BOARD_FACE square, behind the pedestal
-PEDESTAL_SIZE = (0.14, 0.22, 0.08)
-BOARD_THICKNESS = 0.01
-BOARD_OFFSET_X = -0.12
-TAG_CENTRE_HEIGHT = 0.25
-POST_SIZE = (0.03, 0.03, TAG_CENTRE_HEIGHT - BOARD_FACE / 2.0)
 
 # The aruco DetectorParameters the tuner exposes, with OpenCV's stock values.
 # Names are snake_case so they can be YAML keys and ROS parameters; the
@@ -133,7 +110,7 @@ def object_points(size=TAG_SIZE):
 
 def generate_tag_image(tag_id, module_px=40):
     """A square tag36h11 image with its white quiet zone, grayscale uint8."""
-    tag_px = _TAG_MODULES * module_px
+    tag_px = TAG_MODULES * module_px
     marker = cv2.aruco.generateImageMarker(
         cv2.aruco.getPredefinedDictionary(_DICT_ID), tag_id, tag_px)
     pad = QUIET_MODULES * module_px
@@ -180,21 +157,6 @@ def solve_tag_pose(corners, camera_matrix, dist_coeffs, size=TAG_SIZE):
     scalar_errors = [float(np.asarray(e).ravel()[0]) for e in errors]
     best = int(np.argmin(scalar_errors))
     return rvecs[best], tvecs[best], scalar_errors[best]
-
-
-def tag_to_pedestal_top():
-    """The pedestal top centre, expressed in the tag frame, metres.
-
-    Unused by the detector; this is the natural home for the number and a
-    consumer that wants to place an object on the station's pedestal needs it.
-
-    The model faces +x, so tag x = model +y, tag y = model +z, tag z = model
-    +x. The pedestal top centre is (0, 0, PEDESTAL_SIZE[2]) in the model frame
-    and the tag origin is (BOARD_OFFSET_X, 0, TAG_CENTRE_HEIGHT).
-    """
-    return np.array([0.0,
-                     PEDESTAL_SIZE[2] - TAG_CENTRE_HEIGHT,
-                     -BOARD_OFFSET_X])
 
 
 def quaternion_from_rvec(rvec):

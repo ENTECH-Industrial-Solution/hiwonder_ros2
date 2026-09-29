@@ -28,6 +28,7 @@ simulator; this file is only the ROS plumbing.
 """
 
 import json
+import math
 import os
 import threading
 import time
@@ -47,6 +48,8 @@ from geometry_msgs.msg import TransformStamped, Twist
 from interfaces.msg import ApriltagInfo, ApriltagsInfo
 from interfaces.srv import SetString
 from rcl_interfaces.msg import SetParametersResult
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
 from rclpy.node import Node
 from rospider_gazebo import labelling, tag_settings, tags, tkview
 from rospider_gazebo.ros_image import to_image_msg
@@ -54,6 +57,16 @@ from rospider_gazebo.tag_behavior import TagBehavior
 from sensor_msgs.msg import CameraInfo, Image
 
 TUNE_TITLE = 'apriltag_detect tune'
+
+#: Upstream's AXIS (apriltag_recognition.py) in half-tag units: the origin,
+#: three axis tips at 1.5, then a 360-point circle of radius 0.3 on the tag
+#: plane. Scaled by half the tag size at draw time, since the sim's pose is
+#: solved in metres.
+_AXIS_HALF_TAG = np.append(
+    np.float32([[0, 0, 0], [1.5, 0, 0], [0, 1.5, 0], [0, 0, 1.5]]),
+    np.float32([[0.3 * math.cos(math.radians(i)),
+                 0.3 * math.sin(math.radians(i)), 0] for i in range(360)]),
+    axis=0)
 
 # (key, label, from, to, resolution) for the detector sliders; corner
 # refinement is a pair of radio buttons instead.
@@ -92,6 +105,10 @@ class AprilTagNode(Node):
             str(self._param('tuned_path', '~/.ros/apriltag_tuned.json'))))
         image_topic = str(self._param('image_topic',
                                       '/depth_cam/rgb/image_raw'))
+        # What the tuner offers in each tag's "cube" column: the cubes of
+        # the scene being played.
+        self.cube_choices = [str(c) for c in
+                             self._param('cube_choices', ['red', 'green', 'blue'])]
 
         # Shared with the tuner thread: it reads the last overlay frame and
         # the status, and writes settings through apply_settings().
@@ -103,6 +120,13 @@ class AprilTagNode(Node):
         self.memory_frame = str(self._param('memory_frame', 'odom'))
         self.memory = {}          # tag id -> (R, t) of the tag in memory_frame
 
+        # The live per-tag rows, for whoever needs them: the YAML, the tuned JSON and every
+        # window edit end up in apply_settings, not in ROS parameters, so
+        # `ros2 param get` would only ever show the YAML.
+        latched = QoSProfile(depth=1,
+                             durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.behaviors_pub = self.create_publisher(String, '~/behaviors',
+                                                   latched)
         self.baseline = tag_settings.from_flat(self._flat_params())
         self.behavior = TagBehavior(
             self.baseline['control'], self.baseline['behaviors'],
@@ -124,6 +148,15 @@ class AprilTagNode(Node):
         self.place_client = self.create_client(SetString,
                                                '/pick_and_place/place')
         self.broadcaster = tf2_ros.TransformBroadcaster(self)
+        # Remembered tags go out as static TF tag_<id>_remembered under
+        # memory_frame, re-sent on every change, so another node can look a station up long after the camera
+        # stopped seeing it. Static rather than periodic: the pose does not
+        # move until the tag is seen again.
+        self.memory_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+        self.status_pub = self.create_publisher(String, '~/status', latched)
+        self.place_result_pub = self.create_publisher(String, '~/place_result',
+                                                      latched)
+        self._published_status = None
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
@@ -168,6 +201,8 @@ class AprilTagNode(Node):
             self.max_reproj_error = float(settings['max_reproj_error_px'])
             self.behavior.configure(settings['control'],
                                     settings['behaviors'])
+        self.behaviors_pub.publish(String(data=json.dumps(
+            settings['behaviors'], sort_keys=True)))
 
     def _load_tuned(self):
         """Overlay the tuned JSON on the YAML baseline, if the file exists.
@@ -377,6 +412,10 @@ class AprilTagNode(Node):
                                              else ' (no TF)')
             if self.behavior.target in virtual_ids:
                 self.status += ' [remembered]'
+            changed = self.status != self._published_status
+            self._published_status = self.status
+        if changed:
+            self.status_pub.publish(String(data=self.status))
         if decision.twist is not None:
             twist = Twist()
             twist.linear.x, twist.angular.z = (float(v)
@@ -419,6 +458,29 @@ class AprilTagNode(Node):
             updates[tag_id] = (rot_mc @ rot_ct, rot_mc @ tvec.ravel() + t_mc)
         with self._lock:
             self.memory.update(updates)
+        self._broadcast_memory(updates)
+
+    def _broadcast_memory(self, updates):
+        """Static TF tag_<id>_remembered <- memory_frame for the tags that
+        just changed. Quaternion via the same Rodrigues path as the live
+        tag_<id> frames."""
+        transforms = []
+        for tag_id, (rot, t) in updates.items():
+            rvec, _ = cv2.Rodrigues(rot)
+            x, y, z, w = tags.quaternion_from_rvec(rvec)
+            transform = TransformStamped()
+            transform.header.stamp = self.get_clock().now().to_msg()
+            transform.header.frame_id = self.memory_frame
+            transform.child_frame_id = f'tag_{tag_id}_remembered'
+            transform.transform.translation.x = float(t[0])
+            transform.transform.translation.y = float(t[1])
+            transform.transform.translation.z = float(t[2])
+            transform.transform.rotation.x = x
+            transform.transform.rotation.y = y
+            transform.transform.rotation.z = z
+            transform.transform.rotation.w = w
+            transforms.append(transform)
+        self.memory_broadcaster.sendTransform(transforms)
 
     def _recall(self, poses, header):
         """Virtual sightings: remembered approach/place tags not seen now.
@@ -482,6 +544,7 @@ class AprilTagNode(Node):
         self.get_logger().info(message)
         with self._lock:
             self.place_response = message
+        self.place_result_pub.publish(String(data=message))
 
     # ---------------------------------------------------------------- tuner
 
@@ -535,14 +598,16 @@ class AprilTagNode(Node):
         ttk.Label(tags_box, text='id').grid(row=0, column=0)
         ttk.Label(tags_box, text='action').grid(row=0, column=1)
         ttk.Label(tags_box, text='standoff m').grid(row=0, column=2)
-        tag_rows = {}       # tag id -> (action StringVar, standoff StringVar)
+        ttk.Label(tags_box, text='cube').grid(row=0, column=3)
+        tag_rows = {}       # tag id -> (action, standoff, cube) StringVars
 
         def add_row(tag_id, row_settings):
             if tag_id in tag_rows:
                 return
             action = tk.StringVar(value=row_settings['action'])
             standoff = tk.StringVar(value=str(row_settings['standoff']))
-            tag_rows[tag_id] = (action, standoff)
+            cube = tk.StringVar(value=row_settings['cube'])
+            tag_rows[tag_id] = (action, standoff, cube)
             r = len(tag_rows)
             ttk.Label(tags_box, text=str(tag_id)).grid(row=r, column=0)
             box = ttk.Combobox(tags_box, textvariable=action, width=9,
@@ -553,6 +618,10 @@ class AprilTagNode(Node):
             entry.grid(row=r, column=2)
             entry.bind('<Return>', lambda _e: self._tuner_apply())
             entry.bind('<FocusOut>', lambda _e: self._tuner_apply())
+            box = ttk.Combobox(tags_box, textvariable=cube, width=8,
+                               values=[''] + self.cube_choices, state='readonly')
+            box.grid(row=r, column=3)
+            box.bind('<<ComboboxSelected>>', lambda _e: self._tuner_apply())
 
         for key in sorted(settings['behaviors'], key=tag_settings.tag_id):
             add_row(tag_settings.tag_id(key), settings['behaviors'][key])
@@ -574,8 +643,7 @@ class AprilTagNode(Node):
                 # again.
                 message.set('tag id must be a non-negative integer')
                 return
-            add_row(tag_id, {'action': 'none',
-                             'standoff': tag_settings.DEFAULT_STANDOFF})
+            add_row(tag_id, tag_settings.default_behavior())
             new_id.set('')
             self._tuner_apply()
         ttk.Button(add_box, text='add id', command=add_typed).pack(side='left')
@@ -622,13 +690,12 @@ class AprilTagNode(Node):
             reproj.set(base['max_reproj_error_px'])
             for key, var in control_vars.items():
                 var.set(str(base['control'][key]))
-            for tag_id, (action, standoff) in tag_rows.items():
-                row = base['behaviors'].get(
-                    tag_settings.tag_key(tag_id),
-                    {'action': 'none',
-                     'standoff': tag_settings.DEFAULT_STANDOFF})
+            for tag_id, (action, standoff, cube) in tag_rows.items():
+                row = base['behaviors'].get(tag_settings.tag_key(tag_id),
+                                            tag_settings.default_behavior())
                 action.set(row['action'])
                 standoff.set(str(row['standoff']))
+                cube.set(row['cube'])
             message.set('reverted to config/apriltag.yaml')
 
         def do_yaml():
@@ -673,8 +740,9 @@ class AprilTagNode(Node):
                 'behaviors': {
                     tag_settings.tag_key(tag_id): {
                         'action': action.get(),
-                        'standoff': float(standoff.get())}
-                    for tag_id, (action, standoff) in tag_rows.items()},
+                        'standoff': float(standoff.get()),
+                        'cube': cube.get()}
+                    for tag_id, (action, standoff, cube) in tag_rows.items()},
             }
             for key in ('adaptive_thresh_win_size_min',
                         'adaptive_thresh_win_size_max',
@@ -696,8 +764,7 @@ class AprilTagNode(Node):
                 image_label.image = photo      # keep it alive
             status.configure(text=f'{text}\n{response}')
             for tag_id in seen:
-                add_row(tag_id, {'action': 'none',
-                                 'standoff': tag_settings.DEFAULT_STANDOFF})
+                add_row(tag_id, tag_settings.default_behavior())
             root.after(50, refresh)
         refresh()
 
@@ -743,12 +810,24 @@ class AprilTagNode(Node):
         return transform
 
     def _draw(self, frame, corners, tag_id, rvec, tvec):
-        cv2.polylines(frame, [corners.astype(np.int32)], True, (0, 255, 255), 2)
-        centre = corners.mean(axis=0).astype(int)
-        cv2.putText(frame, f'id {tag_id}', (int(centre[0]) - 20, int(centre[1])),
+        """Upstream's overlay (apriltag_recognition.py), colours in BGR:
+        corner dots, an axis triad on a filled disc, and idN under the tag."""
+        for pt in corners:
+            cv2.circle(frame, (int(pt[0]), int(pt[1])), 2, (255, 255, 0), -1)
+        axis = _AXIS_HALF_TAG * (self.tag_size / 2.0)
+        imgpts, _ = cv2.projectPoints(axis, rvec, tvec, self.camera_matrix,
+                                      self.dist_coeffs)
+        imgpts = np.int32(imgpts).reshape(-1, 2)
+        cv2.drawContours(frame, [imgpts[4:]], -1, (0, 255, 255), -1)
+        cv2.line(frame, tuple(imgpts[0]), tuple(imgpts[1]), (0, 0, 255), 3)
+        cv2.line(frame, tuple(imgpts[0]), tuple(imgpts[2]), (0, 255, 0), 3)
+        cv2.line(frame, tuple(imgpts[0]), tuple(imgpts[3]), (255, 0, 0), 3)
+        centre = corners.mean(axis=0)
+        text = 'id' + str(tag_id)
+        size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+        cv2.putText(frame, text,
+                    (int(centre[0] - size[0] / 2), int(centre[1] + size[1] + 25)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        cv2.drawFrameAxes(frame, self.camera_matrix, self.dist_coeffs,
-                          rvec, tvec, self.tag_size * 0.5)
 
 
 def main():

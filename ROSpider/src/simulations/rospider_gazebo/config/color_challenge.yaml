@@ -1,0 +1,24 @@
+# โจทย์ Color Threshold: ปรับช่วงสี LAB ให้ตรวจเจอเฉพาะกล่องที่ต้องการ
+# เปิดหน้าต่าง LAB_Tool ด้วย ros2 launch rospider_gazebo color_challenge.launch.py
+# เลื่อน slider แล้วกด Save (บันทึกที่ ~/.ros/color_challenge_tuned.json ซึ่งจะทับค่าในไฟล์นี้)
+# หรือแก้ตัวเลขในไฟล์นี้แล้วปิด-เปิด launch ใหม่
+# ตรวจ: ros2 run rospider_gazebo check_color.py
+# อยากเริ่มใหม่: git checkout -- ไฟล์นี้ แล้วลบ ~/.ros/color_challenge_tuned.json
+color_detect:
+  ros__parameters:
+    min_area_px: 300
+    kernel_px: 5
+    colors: ['red', 'green', 'blue']
+    detect_type: circle
+    tune: true
+    tuned_path: '~/.ros/color_challenge_tuned.json'
+    # ช่วงสีแต่ละสี: [L, A, B] ต่ำสุด (min) และสูงสุด (max) ค่าละ 0-255
+    red:
+      min: [0, 135, 130]
+      max: [255, 255, 255]
+    green:
+      min: [0, 0, 130]
+      max: [255, 60, 255]
+    blue:
+      min: [80, 130, 0]
+      max: [255, 255, 100]

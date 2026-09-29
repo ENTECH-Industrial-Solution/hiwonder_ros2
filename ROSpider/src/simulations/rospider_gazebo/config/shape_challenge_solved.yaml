@@ -1,0 +1,10 @@
+# เฉลยโจทย์ 3D Shape Recognition (สำหรับวิทยากร)
+# ros2 launch rospider_gazebo shape_challenge.launch.py params:=<path ของไฟล์นี้>
+/**:
+  ros__parameters:
+    # ระยะจากกล้องถึงพื้น (มิลลิเมตร) - อะไรที่ไม่ใกล้กว่าพื้นจะไม่นับเป็นวัตถุ
+    plane_distance: 280.0
+    # บริเวณในภาพที่หุ่นค้นหาวัตถุ [y_min, y_max, x_min, x_max] เป็นพิกเซล (ภาพขนาด 640x480)
+    roi: [0, 350, 150, 500]
+    # รูปทรงที่หุ่นสนใจ (เลือกจาก sphere, cuboid, cylinder) หุ่นจะเลือกชิ้นที่ใกล้กล้องที่สุด
+    shapes: ['sphere']

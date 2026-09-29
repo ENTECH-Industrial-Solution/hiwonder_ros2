@@ -24,20 +24,22 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('slam_toolbox'), 'launch', 'online_sync_launch.py')),
         launch_arguments={
-            'slam_params_file': os.path.join(slam_pkg, 'config', 'slam.yaml'),
+            'slam_params_file': LaunchConfiguration('params_file'),
             'use_sim_time': 'true',
-            'use_lifecycle_manager': 'true',
+            # No autostart and no bond: scripts/lifecycle_activate.py drives the transitions.
+            'autostart': 'false',
+            'use_lifecycle_manager': 'false',
         }.items(),
     )
 
-    # The launch file's own autostart sometimes loses the configure response and never activates
-    # the node; the Nav2 lifecycle manager waits for the services and retries.
-    slam_lifecycle_manager = Node(
-        package='nav2_lifecycle_manager',
-        executable='lifecycle_manager',
-        name='lifecycle_manager_slam',
+    # The configure reply is sometimes lost on Jazzy ("failed to send response"): slam_toolbox's own
+    # autostart then never activates the node, and nav2's lifecycle_manager waits for the reply
+    # forever. lifecycle_activate.py re-reads the node's state instead of trusting replies.
+    slam_activate = Node(
+        package='rospider_gazebo',
+        executable='lifecycle_activate.py',
+        arguments=['slam_toolbox'],
         output='screen',
-        parameters=[{'node_names': ['slam_toolbox'], 'autostart': True, 'use_sim_time': True}],
     )
 
     rviz = Node(
@@ -52,7 +54,9 @@ def generate_launch_description():
         DeclareLaunchArgument('world', default_value=os.path.join(pkg, 'worlds', 'rospider_room.sdf')),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('rviz', default_value='true'),
+        DeclareLaunchArgument('params_file', default_value=os.path.join(slam_pkg, 'config', 'slam.yaml'),
+                              description="slam_toolbox parameters (default: Hiwonder's slam/config/slam.yaml)"),
         gazebo,
         # RViz starts with the rest so its TF buffer does not begin before the sim clock runs
-        TimerAction(period=5.0, actions=[slam, slam_lifecycle_manager, rviz]),
+        TimerAction(period=5.0, actions=[slam, slam_activate, rviz]),
     ])

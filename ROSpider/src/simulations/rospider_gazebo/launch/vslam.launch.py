@@ -6,7 +6,14 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogI
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from rospider_gazebo.maps import resolve_map
+from rospider_gazebo.maps import localization_copy, resolve_map
+
+#: Brought up in this order by lifecycle_activate.py instead of nav2's lifecycle_manager, which
+#: waits forever when a change_state reply is lost (seen in ~1 of 12 V-SLAM launches). Same list
+#: as nav2_bringup/launch/navigation_launch.py's lifecycle_nodes.
+NAV2_NODES = ('controller_server', 'smoother_server', 'planner_server', 'route_server',
+              'behavior_server', 'velocity_smoother', 'collision_monitor', 'bt_navigator',
+              'waypoint_follower', 'docking_server')
 
 
 def launch_setup(context):
@@ -14,20 +21,27 @@ def launch_setup(context):
 
     Uses only V-SLAM's own files: config/vslam.yaml, config/vslam_nav2_params.yaml, rviz/vslam.rviz,
     and maps in <workspace>/maps/vslam. localization:=false builds a new 3D map; localization:=true
-    loads it, relocalizes against it with the camera and drives Nav2 on it.
+    loads a copy of it, relocalizes against it with the camera and drives Nav2 on it.
     """
     pkg = get_package_share_directory('rospider_gazebo')
     localization = LaunchConfiguration('localization').perform(context) == 'true'
     database = resolve_map(LaunchConfiguration('map').perform(context), '.db', subdir='vslam')
-    vslam_params = os.path.join(pkg, 'config', 'vslam.yaml')
+    vslam_params = (LaunchConfiguration('vslam_params').perform(context)
+                    or os.path.join(pkg, 'config', 'vslam.yaml'))
+    if localization:
+        # rtabmap writes its 2D grid back into the database on shutdown, ghost walls included
+        # (see maps.localization_copy): localize on a copy so the map file never changes.
+        source = database
+        database = localization_copy(database)
 
     # The camera must look ahead, like the real robot's init_horizontal action before RTAB-Map
+    # (vslam_challenge sets init on purpose)
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'gazebo.launch.py')),
         launch_arguments={
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
-            'arm_pose': 'horizontal',
+            'arm_pose': LaunchConfiguration('arm_pose'),
         }.items(),
     )
 
@@ -51,6 +65,9 @@ def launch_setup(context):
     if localization:
         # Load the whole saved map and only localize in it: no new nodes are added
         overrides.update({'Mem/IncrementalMemory': 'false', 'Mem/InitWMWithAllNodes': 'true'})
+        # map_always_update adds this run's views to /map at their (lagging) camera poses:
+        # ghost walls in the planner's map. Mapping keeps it (map_saver_cli needs /map).
+        overrides['map_always_update'] = False
     rtabmap = Node(
         package='rtabmap_slam',
         executable='rtabmap',
@@ -84,8 +101,12 @@ def launch_setup(context):
             launch_arguments={
                 'params_file': LaunchConfiguration('params_file'),
                 'use_sim_time': 'true',
-                'autostart': 'true',
+                'autostart': 'false',
             }.items(),
+        ))
+        actions.append(Node(
+            package='rospider_gazebo', executable='lifecycle_activate.py', output='screen',
+            arguments=list(NAV2_NODES) + ['--timeout', '180'],
         ))
     if LaunchConfiguration('rviz').perform(context) == 'true':
         actions.append(Node(
@@ -96,7 +117,8 @@ def launch_setup(context):
         ))
 
     return [
-        LogInfo(msg=f"V-SLAM map ({'loading' if localization else 'new, saved on shutdown'}): {database}"),
+        LogInfo(msg=f'V-SLAM map (loading a copy of {source}): {database}' if localization
+                else f'V-SLAM map (new, saved on shutdown): {database}'),
         gazebo,
         # Start once the sim clock, TF and camera are running
         TimerAction(period=8.0, actions=actions),
@@ -111,6 +133,10 @@ def generate_launch_description():
                               description='false: build a new map (overwrites it); true: load it and navigate with Nav2'),
         DeclareLaunchArgument('map', default_value='map',
                               description='Map name, kept as <workspace>/maps/vslam/<name>.db, or a path to a .db file'),
+        DeclareLaunchArgument('vslam_params', default_value='',
+                              description='RTAB-Map parameters (default: config/vslam.yaml)'),
+        DeclareLaunchArgument('arm_pose', default_value='horizontal', choices=['init', 'horizontal'],
+                              description='horizontal: the camera looks ahead; init: tilted at the floor'),
         DeclareLaunchArgument('params_file', default_value=os.path.join(pkg, 'config', 'vslam_nav2_params.yaml'),
                               description='Nav2 parameters (localization mode only)'),
         DeclareLaunchArgument('gui', default_value='true'),

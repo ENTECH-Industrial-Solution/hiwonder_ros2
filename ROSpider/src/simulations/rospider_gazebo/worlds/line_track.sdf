@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+<!-- The room of rospider_room.sdf with nothing in it but a line on the floor, for line_following.launch.py.
+     The four outer walls are kept (the LiDAR guard needs something to stop for); the partition and the
+     obstacles are not, because the loop runs through where they stand. The floor is a visual-only box
+     carrying textures/line_track.png, drawn by tools/make_line_track.py from rospider_gazebo/line_track.py,
+     which is also where the launch file reads the robot's start pose on the line. -->
+<sdf version="1.9">
+  <world name="line_track">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <scene>
+      <ambient>0.6 0.6 0.6 1</ambient>
+      <background>0.8 0.8 0.8 1</background>
+      <grid>false</grid>
+    </scene>
+
+    <model name="line_track">
+      <static>true</static>
+      <link name="link">
+        <visual name="floor_v">
+          <pose>0 0 0.0005 0 0 0</pose>
+          <geometry><box><size>4.0 3.0 0.001</size></box></geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <pbr><metal>
+              <albedo_map>textures/line_track.png</albedo_map>
+              <roughness>0.9</roughness>
+              <metalness>0</metalness>
+            </metal></pbr>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+          <material><ambient>0.75 0.75 0.72 1</ambient><diffuse>0.75 0.75 0.72 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="walls">
+      <static>true</static>
+      <link name="link">
+        <collision name="north_c"><pose>0 1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry></collision>
+        <visual name="north_v"><pose>0 1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_north.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+        <collision name="south_c"><pose>0 -1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry></collision>
+        <visual name="south_v"><pose>0 -1.525 0.5 0 0 0</pose><geometry><box><size>4.1 0.05 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_south.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+        <collision name="east_c"><pose>2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry></collision>
+        <visual name="east_v"><pose>2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_east.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+        <collision name="west_c"><pose>-2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry></collision>
+        <visual name="west_v"><pose>-2.025 0 0.5 0 0 0</pose><geometry><box><size>0.05 3.0 1.0</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>textures/wall_west.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

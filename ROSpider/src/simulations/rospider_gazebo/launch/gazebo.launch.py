@@ -8,11 +8,13 @@ from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from rospider_gazebo.maps import resolve_world
 
 
 def launch_setup(context):
     pkg = get_package_share_directory('rospider_gazebo')
-    world = LaunchConfiguration('world').perform(context)
+    # A name (slam_challenge) means worlds/<name>.sdf; anything with a '/' is a path.
+    world = resolve_world(LaunchConfiguration('world').perform(context), os.path.join(pkg, 'worlds'))
     gui = LaunchConfiguration('gui').perform(context) == 'true'
 
     gz_sim = IncludeLaunchDescription(
@@ -100,9 +102,9 @@ def launch_setup(context):
 
 
 def generate_launch_description():
-    pkg = get_package_share_directory('rospider_gazebo')
     return LaunchDescription([
-        DeclareLaunchArgument('world', default_value=os.path.join(pkg, 'worlds', 'rospider_room.sdf')),
+        DeclareLaunchArgument('world', default_value='rospider_room',
+                              description='a world in worlds/ by name (slam_challenge), or a path'),
         DeclareLaunchArgument('gui', default_value='true', description='Show the Gazebo window'),
         DeclareLaunchArgument('arm_pose', default_value='init', choices=['init', 'horizontal'],
                               description='Arm start pose: camera tilted at the floor (init) or level (horizontal)'),

@@ -1,49 +1,40 @@
-# HSV bounds for the simulated cubes. OpenCV hue is 0-179. Red wraps the hue
-# origin, so it carries two ranges that are OR-ed together.
+# LAB bands for the simulated cubes, in the shape of the real robot's
+# lab_config.yaml: one min/max triple per colour over OpenCV's 8-bit
+# L, A, B (0-255). A and B sit at 128 for grey; red pushes A up, green pulls
+# A down, blue pulls B down and yellow pushes B up. L is left wide open so a
+# cube in shadow still matches.
 color_detect:
   ros__parameters:
     # 300: each colour mask matches TWO real objects, not one. The world
     # (worlds/rospider_room.sdf) has permanent, static, visual-only decorative
-    # cubes named red_cube/green_cube/blue_cube at x=0.55 (0.55, +-0.12/0, 0.025),
-    # whose <ambient>/<diffuse> are byte-for-byte the same colour as the
-    # graspable pick_cube_{red,green,blue} at x=0.235. So every colour mask
-    # legitimately has a near, large blob (the graspable cube) and a far,
-    # small blob (the decorative one) -- this is not a rendering artefact and
-    # is not dev-machine-specific; it reproduces on the Jetson too. A fixed
-    # area threshold can't robustly separate them across camera poses (this
-    # node is 2D-only by design, with no depth, so a future look-pose change
-    # shifts both blobs' apparent size together). Selection between same-
-    # colour blobs is left to the consumer (Task 6: largest box per colour,
-    # confirmed reachable by IK) -- see the multi-blob warning below.
+    # cubes named red_cube/green_cube/blue_cube at x=0.55 whose colour is
+    # byte-for-byte the graspable pick_cube_{red,green,blue}'s at x=0.235.
+    # A fixed area threshold can't separate them across camera poses, so
+    # selection between same-colour blobs is left to the consumer
+    # (pick_and_place: largest box per colour, confirmed reachable by IK).
     min_area_px: 300
     kernel_px: 5
     colors: ['red', 'green', 'blue']
+    # circle: the min-enclosing circle of the largest blob, as upstream's
+    # color demos draw it; rect: its min-area box
+    # plus a centre dot. Only the drawn image_result differs.
+    detect_type: circle
 
-    # tune:=true opens an OpenCV trackbar window for adjusting the bounds
-    # below while detection keeps running and publishing. Off by default:
-    # it needs a display and moves rclpy.spin onto a worker thread.
-    #   the 'colour' slider has one slot past the last colour: sliding onto
-    #   it adds a new colour (n does the same), s = save to tuned_path,
-    #   r = revert to this file, y = print a paste-ready YAML block,
-    #   q = close the window (node keeps detecting)
-    # A colour added there is a full detection class: its name becomes
-    # ObjectInfo.class_name on /yolo/object_detect. It starts with one HSV
-    # band; only reds wrap the hue origin and red is already here, so a
-    # wrapping colour needs its second band written into this file by hand.
+    # tune:=true opens the LAB_Tool-style window (mask left, camera right,
+    # L/A/B min-max sliders, Color list with Add/Delete/Save). Off by
+    # default: it needs a display and moves rclpy.spin onto a worker thread.
     tune: false
-    # Written by 's' and read back at startup if it exists. It OVERRIDES the
-    # bounds in this file, and the node logs loudly when it does — a
-    # forgotten tuned file silently shadowing this one is the failure worth
-    # guarding against. Delete it to go back to the values here; use 'y' to
-    # move a value you want to keep back into this file, which is what gets
-    # committed.
+    # Written by Save and read back at startup if it exists. It OVERRIDES the
+    # bands in this file, and the node logs loudly when it does. Delete it
+    # to go back to the values here; Save also logs a YAML block to move a
+    # value you want to keep back into this file, which is what's committed.
     tuned_path: '~/.ros/color_detect_tuned.json'
     red:
-      lower: [0, 120, 80, 170, 120, 80]
-      upper: [10, 255, 255, 179, 255, 255]
+      min: [0, 150, 130]
+      max: [255, 255, 255]
     green:
-      lower: [40, 100, 60]
-      upper: [85, 255, 255]
+      min: [0, 0, 130]
+      max: [255, 110, 255]
     blue:
-      lower: [95, 120, 60]
-      upper: [130, 255, 255]
+      min: [0, 130, 0]
+      max: [255, 255, 100]

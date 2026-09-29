@@ -16,8 +16,7 @@ pick_and_place:
     # ahead of the camera, so the closest and lowest in frame) sits at
     # v = [226, 376], well clear of both edges, and -1.35 would additionally
     # bring the decorative cubes at x=0.55 back into frame (they are above
-    # the frame entirely at -1.55; see SIMULATION.md's pick-and-place
-    # verification section). An earlier measurement on this branch reported
+    # the frame entirely at -1.55). An earlier measurement on this branch reported
     # green clipping the bottom edge at -1.35 (task-6-report.md) -- that
     # measurement was wrong: it modelled a cube left over in the drop zone
     # from an earlier run in the same session (~(0.165, 0, 0.080) in

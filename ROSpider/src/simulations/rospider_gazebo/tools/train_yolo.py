@@ -28,9 +28,17 @@ def main():
     parser.add_argument('--base', default='yolo11n.pt',
                         help='starting weights; n is enough for a handful of '
                              'classes and keeps the committed file small')
-    parser.add_argument('--epochs', type=int, default=60)
+    # 100, not 60: with the 10-20 image datasets a workshop team captures,
+    # epochs matter more than images. Measured on the sim cubes from
+    # yolo11n.pt (mAP50 on the same 48-image val set): 20 images x 30 epochs
+    # = 0.65, 20 x 100 = 0.90, 10 x 100 = 0.80, 5 x 100 = 0.50. A 20-image
+    # run at 100 epochs is about one minute on an RTX 5060 and 25 minutes
+    # on its 16-thread CPU (same 0.90).
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--imgsz', type=int, default=640)
-    parser.add_argument('--batch', type=int, default=16)
+    # 8 rather than 16: a 10-image dataset cannot fill a batch of 16, and
+    # ultralytics then trains on one oversized batch per epoch.
+    parser.add_argument('--batch', type=int, default=8)
     parser.add_argument('--device', default='0',
                         help="'0' for the first GPU, 'cpu' to force CPU")
     args = parser.parse_args()

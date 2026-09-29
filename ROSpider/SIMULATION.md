@@ -1,669 +1,326 @@
 # ROSpider Simulation
 
-วิธีรัน ROSpider แบบ simulation ล้วนๆ บน PC (ไม่ต่อหุ่นจริง) — ทดสอบบน Ubuntu 24.04 + ROS 2 Jazzy + Gazebo Harmonic
+## 1. ภาพรวม
 
-## จำลองอะไรได้บ้าง
+**ROSpider** คือหุ่นแมงมุม 6 ขาของ Hiwonder มีแขนกลกับกล้อง depth ติดอยู่ที่ปลายแขน และมี LiDAR
 
-| ต้องการ | ใช้ | หมายเหตุ |
-|---|---|---|
-| ดูโมเดล/ขยับข้อต่อด้วย slider | `rospider_description display.launch.py` | RViz อย่างเดียว ไม่มี physics |
-| วางแผนแขนกลแบบไม่ใช้ Gazebo | `robot_moveit_config demo.launch.py` | mock hardware |
-| หุ่นในสภาพแวดล้อม + เซนเซอร์ | `rospider_gazebo gazebo.launch.py` | LiDAR, depth camera, IMU, odom |
-| ทำแผนที่ (SLAM) | `rospider_gazebo slam.launch.py` | slam_toolbox + ค่า `slam/config/slam.yaml` |
-| ทำแผนที่ด้วยกล้อง + LiDAR | `rospider_gazebo rtabmap_slam.launch.py` | RTAB-Map (RGB-D + LiDAR) ด้วยค่าของ Hiwonder |
-| นำทางด้วยแผนที่ RTAB-Map | `rospider_gazebo rtabmap_navigation.launch.py` | RTAB-Map โหมด localization + Nav2 |
-| V-SLAM กล้องอย่างเดียว | `rospider_gazebo vslam.launch.py` | RTAB-Map ใช้แค่ depth camera (ภาพสี + depth) + odometry ไม่แตะ LiDAR เลย มีไฟล์ของตัวเองทั้งหมด — ทำแผนที่ หรือโหลดแผนที่ 3D มานำทาง (`localization:=true`) |
-| นำทาง (Nav2) | `rospider_gazebo navigation.launch.py` | แผนที่ 2D ห้อง sim ที่ทำไว้แล้ว หรือแผนที่ของเราเอง |
-| แขนกล MoveIt ใน Gazebo | `rospider_gazebo moveit.launch.py` | สั่งแขน/gripper ผ่าน MoveIt |
-| หยิบและวางลูกบาศก์สีอัตโนมัติ | `rospider_gazebo pick_place.launch.py` | ตรวจจับสีด้วย OpenCV + IK ปิดรูปเอง ไม่ใช้ MoveIt |
+เอกสารนี้อธิบาย **simulation บน PC** (package `rospider_gazebo`) ที่ Entech เพิ่มเข้ามา ใช้สอนในเวิร์กช็อปโดยไม่ต้องมีหุ่นจริง
 
-**ข้อจำกัดสำคัญ:** โค้ดเดินจริงของ Hiwonder (`driver/kinematics/kinematics.so`) เป็น binary ของ ARM (Jetson) เท่านั้น ไม่มี source จึงรันบน PC ไม่ได้ ใน sim จึงใช้ท่าเดินที่เขียนขึ้นเอง (`scripts/sim_gait.py`) — ก้าวขาแบบ tripod (ยกทีละ 3 ขาสลับกัน) ตามความเร็วที่สั่ง เท้าที่แตะพื้นอยู่นิ่งกับพื้น แต่ตัวหุ่นถูก Gazebo เลื่อนไปตาม `cmd_vel` โดยตรง (ขาไม่ได้ออกแรงดันพื้นจริง) — เหมาะกับทดสอบ SLAM / Nav2 / vision / แขนกล แต่ไม่เหมาะกับทดสอบการเดินบนพื้นขรุขระ การทรงตัว หรือท่าเดินของหุ่นจริง
+- ใช้ได้บน Ubuntu 24.04 + ROS 2 Jazzy + Gazebo Harmonic
+- ชื่อ topic ตรงกับหุ่นจริง (`/controller/cmd_vel`, `/scan`, `/odom`, `/depth_cam/...`)
+- ท่าเดินใน sim เป็นแบบจำลอง: ขาก้าวให้ดู แต่ตัวหุ่นถูกเลื่อนไปตาม `cmd_vel` โดยตรง เพราะโค้ดเดินของ Hiwonder (`kinematics.so`) เป็น binary ของ ARM ที่รันบน PC ไม่ได้
 
-## ติดตั้งครั้งแรก
+### ติดตั้งและ build (ครั้งแรก)
 
 ```bash
 cd ~/entech_hiwonder_ros2_ws/ROSpider
 source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
+colcon build --symlink-install
 ```
 
-`rosdep` จะติดตั้ง `ros-jazzy-trac-ik-kinematics-plugin` ให้ด้วย (ถ้าไม่มี MoveIt จะหา IK ของแขนไม่ได้ — ลาก marker ใน RViz ไม่ได้ แต่สั่งแบบ joint ยังได้) ถ้าไม่อยากรัน rosdep ทั้งหมด:
+ทุก terminal ที่จะใช้ ต้องรันสามบรรทัดนี้ก่อน:
 
 ```bash
-sudo apt install ros-jazzy-trac-ik-kinematics-plugin
-```
-
-Build:
-
-```bash
-colcon build
-source install/local_setup.bash
-```
-
-ทุก terminal ที่จะรันคำสั่งด้านล่างต้อง `source /opt/ros/jazzy/setup.bash` และ `source install/local_setup.bash` ก่อน
-
-## 1. ดูโมเดลใน RViz
-
-launch file ของ Hiwonder ต้องมีตัวแปร `need_compile`:
-
-```bash
+source /opt/ros/jazzy/setup.bash
+source ~/entech_hiwonder_ros2_ws/ROSpider/install/local_setup.bash
 export need_compile=True
-ros2 launch rospider_description display.launch.py
 ```
 
-## 2. MoveIt แบบ mock (ไม่มี Gazebo)
+ขับหุ่นด้วยคีย์บอร์ด ใช้ได้กับทุกหัวข้อ:
 
 ```bash
-ros2 launch robot_moveit_config demo.launch.py
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/controller/cmd_vel
 ```
 
-## 3. Gazebo
+## 2. โครงสร้างไฟล์
+
+```
+ROSpider/                  colcon workspace (build จากในโฟลเดอร์นี้)
+├── SIMULATION.md          ← ไฟล์นี้
+├── README.md              README ต้นฉบับของ Hiwonder (หุ่นจริง)
+├── maps/                  แผนที่ที่ทำเอง (.yaml/.pgm = 2D, .db = 3D)
+└── src/
+    ├── driver/ app/ example/ slam/ navigation/ ...   โค้ดของ Hiwonder (หุ่นจริง)
+    └── simulations/
+        ├── rospider_description/   URDF / โมเดลหุ่น
+        ├── robot_moveit_config/    ค่า MoveIt ของแขน
+        └── rospider_gazebo/        ← simulation ทั้งหมดอยู่ที่นี่
+            ├── launch/             ไฟล์สำหรับ ros2 launch (หนึ่งไฟล์ต่อหนึ่งหัวข้อ)
+            ├── scripts/            node ต่าง ๆ (ท่าเดิน, ตรวจจับสี/AprilTag, หยิบของ, เดโม)
+            ├── rospider_gazebo/    โค้ด Python ที่ใช้ร่วมกัน (IK, PID, ...)
+            ├── config/             ค่าปรับตั้ง (.yaml) เช่นช่วงสี, Nav2, RTAB-Map
+            ├── worlds/ models/     ฉากใน Gazebo และวัตถุ (ลูกบาศก์, แท่น, ป้าย AprilTag)
+            ├── maps/               แผนที่ห้อง sim ที่ทำไว้ให้แล้ว
+            ├── urdf/ rviz/         URDF ส่วนของ sim และหน้าจอ RViz
+            ├── test/               unit test
+            └── tools/              สคริปต์ช่วย (เก็บ dataset/เทรน YOLO, สร้างพื้นผิว)
+```
+
+## 3. หัวข้อในเวิร์กช็อป
+
+| หัวข้อ | คำสั่งหลัก |
+|---|---|
+| MoveIt2 Simulation | `robot_moveit_config demo.launch.py` |
+| Gazebo Simulation | `rospider_gazebo gazebo.launch.py` |
+| SLAM Mapping | `rospider_gazebo slam.launch.py` |
+| RTAB-VSLAM 3D Mapping | `rospider_gazebo vslam.launch.py` |
+| Color Threshold Adjustment | `rospider_gazebo lab_tool.launch.py` |
+| Color Tracking | `rospider_gazebo object_tracking.launch.py` |
+| AprilTag Tag Tracking | `rospider_gazebo apriltag_track.launch.py` |
+| Autonomous Line Following | `rospider_gazebo line_following.launch.py` |
+| 3D Vision: Object Grasping | `rospider_gazebo track_and_grab.launch.py` |
+| 3D Vision: Shape Recognition | `rospider_gazebo object_classification.launch.py` |
+
+### MoveIt2 Simulation
+
+วางแผนการเคลื่อนที่ของแขนกลด้วย MoveIt ใน RViz เลือก planning group `arm` หรือ `gripper` ลาก marker ไปยังท่าที่ต้องการ แล้วกด **Plan & Execute**
+
+```bash
+ros2 launch robot_moveit_config demo.launch.py      # แขนจำลอง ไม่มี Gazebo
+ros2 launch rospider_gazebo moveit.launch.py        # แขนใน Gazebo (กล้องบนแขนขยับตาม)
+```
+
+### Gazebo Simulation
+
+เปิดหุ่นในห้องจำลองพร้อมเซนเซอร์ครบ (LiDAR, กล้อง depth, IMU, odometry) แล้วขับด้วย teleop
 
 ```bash
 ros2 launch rospider_gazebo gazebo.launch.py
 ```
 
-โลกเริ่มต้นคือห้อง 4×3 ม. (`worlds/rospider_room.sdf`) มีกำแพงกั้น กล่อง ทรงกระบอก และลูกบาศก์สีแดง/เขียว/น้ำเงินหน้าหุ่นไว้ทดสอบ vision (ลูกบาศก์ไม่มี collision — หุ่นเดินทะลุได้ เพราะเตี้ยกว่าระนาบ LiDAR ทำให้ Nav2 หลบไม่ได้)
-argument: `world:=<path.sdf>`, `x:=` `y:=` `yaw:=` (จุดเกิด), `arm_pose:=horizontal` (ให้กล้องบนแขนมองตรงไปข้างหน้า แทนท่าเริ่มต้นที่ก้มมองพื้น), `gui:=false` (ไม่เปิดหน้าต่าง Gazebo — ดูหัวข้อปัญหาที่พบบ่อย)
+ตัวเลือกที่ใช้บ่อย:
+- `arm_pose:=horizontal` ให้กล้องมองตรงไปข้างหน้า
+- `world:=<ชื่อ>` เปลี่ยนห้อง ใส่แค่ชื่อไฟล์ใน `worlds/` ได้ เช่น `world:=slam_challenge` (ใช้ได้กับทุก launch ที่เปิด Gazebo)
+- `gui:=false` ไม่เปิดหน้าต่าง Gazebo
 
-ขับหุ่นด้วยคีย์บอร์ด (อีก terminal):
+ดูภาพกล้องได้ด้วย `ros2 run rqt_image_view rqt_image_view`
 
-```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/controller/cmd_vel
-```
+### SLAM Mapping
 
-ขาก้าวได้เร็วสุดราว 0.23 ม./วิ. (หมุน ~1 rad/วิ.) ถ้าสั่งเร็วกว่านั้นตัวหุ่นจะถูกลดความเร็วลงให้ขาตามทัน — ค่าเริ่มต้นของ teleop_twist_keyboard คือ 0.5 ม./วิ. กด `z` เพื่อลดความเร็ว (หุ่นจริงเดินราว 0.03–0.05 ม./วิ.)
+ทำแผนที่ 2D ด้วย LiDAR (slam_toolbox) มีขั้นตอนดังนี้:
 
-### Topic ที่ sim ให้ (ชื่อเดียวกับหุ่นจริง)
+1. เปิด SLAM:
+   ```bash
+   ros2 launch rospider_gazebo slam.launch.py
+   ```
+2. ขับหุ่นด้วย teleop ให้ทั่วห้อง
+3. เซฟแผนที่โดยรันจากโฟลเดอร์ `ROSpider`:
+   ```bash
+   ros2 run nav2_map_server map_saver_cli -f maps/room1 --ros-args -p use_sim_time:=true
+   ```
 
-| Topic | ชนิด |
-|---|---|
-| `/controller/cmd_vel` | สั่งเคลื่อนที่ (Twist) — teleop, app, Nav2 ใช้ topic นี้ (`sim_gait` รับไปก้าวขา) |
-| `/scan` | LaserScan 360° ระยะ 0.2–12 ม. (ไม่เห็นตัวหุ่นเอง) |
-| `/imu` | Imu |
-| `/odom`, TF `odom → base_footprint` | odometry จาก Gazebo (ไม่มี drift) |
-| `/joint_states` | ข้อต่อทั้ง 29 ตัว |
-| `/depth_cam/rgb/image_raw`, `/depth_cam/rgb/camera_info` | ภาพสี 640×480 |
-| `/depth_cam/depth/image_raw`, `/depth_cam/depth/camera_info` | depth แบบ `32FC1` (หน่วยเมตร) |
-| `/depth_cam/depth/points` | PointCloud2 |
+ถ้าจะใช้แผนที่นี้นำทาง ให้รัน `ros2 launch rospider_gazebo navigation.launch.py map:=room1` แล้วกด **2D Goal Pose** ใน RViz (`map:=` หาใน `ROSpider/maps/` ก่อน แล้วค่อยหาใน `maps/` ของโฟลเดอร์ที่รันคำสั่ง)
 
-Controller (ros2_control): `leg_controller`, `arm_controller`, `gripper_controller` (action `<ชื่อ>/follow_joint_trajectory` ชื่อเดียวกับบนหุ่นจริง)
+**โจทย์: ซ่อมค่าให้ผ่านด่าน** (10–15 นาที)
 
-ดูภาพกล้อง: `ros2 run rqt_image_view rqt_image_view /depth_cam/rgb/image_raw`
-
-## 4. SLAM (ทำแผนที่ด้วย LiDAR)
+ห้องโจทย์มีสองห้องเชื่อมกันด้วยประตู ค่า SLAM ที่ให้มาตั้งผิดไว้ 3 จาก 6 ค่า หาให้เจอแล้วแก้จนผ่านครบ 3 ด่าน
 
 ```bash
-ros2 launch rospider_gazebo slam.launch.py
+ros2 launch rospider_gazebo slam_challenge.launch.py
 ```
 
-เปิด Gazebo + slam_toolbox + RViz (`slam/rviz/slam.rviz`) แล้วขับหุ่นด้วย teleop ให้ทั่วห้อง จากนั้นบันทึกแผนที่ 2D — ดูหัวข้อ "บันทึกและเรียกใช้แผนที่"
+1. แก้ค่าในไฟล์โจทย์ `src/simulations/rospider_gazebo/config/slam_challenge.yaml` (launch พิมพ์ path ให้ทุกครั้ง) แล้วปิด-เปิด launch ใหม่ — ต้อง build ด้วย `--symlink-install` ไม่งั้นแก้แล้วต้อง `colcon build` ใหม่
+2. ขับให้ทั่วทั้งสองห้อง แล้วเซฟแผนที่: `ros2 run nav2_map_server map_saver_cli -f maps/<ชื่อ> --ros-args -p use_sim_time:=true`
+3. ตรวจ: `ros2 run rospider_gazebo check_slam.py <ชื่อ>` บอกผลทีละด่านพร้อมคำใบ้
 
-## 4.1 RTAB-Map (กล้อง + LiDAR)
+ด่าน: 1 มีแผนที่ · 2 สำรวจครอบคลุม ≥ 90% · 3 แผนที่ละเอียด (ช่องประตูเปิด ผนังไม่หนาเกินจริง) — อยากเริ่มใหม่: `git checkout -- src/simulations/rospider_gazebo/config/slam_challenge.yaml`
+
+นำทางในห้องโจทย์ด้วยแผนที่ที่เซฟ: `ros2 launch rospider_gazebo navigation.launch.py world:=slam_challenge map:=<ชื่อ>`
+
+**โจทย์ Nav2: ให้หุ่นวิ่งครบเส้นทาง** (10–15 นาที)
+
+ใช้ห้องโจทย์เดิมกับแผนที่เฉลย ค่า Nav2 ตั้งผิดไว้ 3 จาก 6 ค่า แก้จนหุ่นวิ่งครบ 3 จุด (มุมห้อง A → ผ่านประตู ทางเดิน อ้อมทรงกระบอก ไปมุมซ้ายบนห้อง B → กลับจุดเริ่ม) ภายใน 300 วินาที
 
 ```bash
-ros2 launch rospider_gazebo rtabmap_slam.launch.py map:=room1
+ros2 launch rospider_gazebo nav_challenge.launch.py      # map:=<ชื่อ> ใช้แผนที่ของตัวเอง
+ros2 run rospider_gazebo check_nav.py                    # ตัวตรวจสั่งวิ่งเองแล้วบอกผลทีละด่าน
 ```
 
-เปิด Gazebo โดยยกกล้องบนแขนให้มองตรงไปข้างหน้า (เหมือนท่า `init_horizontal` ที่หุ่นจริงใช้ก่อนรัน RTAB-Map) แล้วรัน RTAB-Map ด้วย launch ของ Hiwonder (`slam/launch/include/rtabmap.launch.py`) — ใช้ภาพสี + depth + LiDAR และ odometry จาก `/odom` พร้อม RViz (`slam/rviz/rtabmap.rviz`) แสดง point cloud, graph และแผนที่ 2D ขับหุ่นด้วย teleop ให้ทั่วห้อง ผนังและสิ่งกีดขวางในห้อง sim มีลวดลายให้กล้องจับ feature ได้ RTAB-Map จึงหา loop closure ได้ (ผนังสีเรียบจะหาไม่เจอ)
+แก้ค่าใน `src/simulations/rospider_gazebo/config/nav_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง — ด่าน: 1 ถึงเป้าหมายแรก · 2 ผ่านประตูไปห้อง B · 3 วิ่งครบทันเวลา (ค่าผิดบางค่าจะโผล่ให้เห็นหลังแก้ค่าอื่นแล้ว ต้องแก้ครบทั้ง 3 ค่าถึงจะผ่านครบ)
 
-- แผนที่ถูกบันทึกตอนปิด launch ลง `ROSpider/maps/room1.db` (ไม่ใส่ `map:=` จะเป็น `rtabmap.db`) — เริ่มรอบใหม่ด้วยชื่อเดิม ไฟล์เดิมจะถูกเขียนทับ
-- เปิดดูฐานข้อมูล: `rtabmap-databaseViewer maps/room1.db` (รันจากโฟลเดอร์ `ROSpider`)
-- RTAB-Map ใช้ CPU มาก real time factor จะลดลง (ราว 0.6 บนเครื่องที่ทดสอบ)
+### RTAB-VSLAM 3D Mapping
 
-## 4.2 V-SLAM กล้องอย่างเดียว (depth camera)
+ทำแผนที่ 3D ด้วย RTAB-Map
 
 ```bash
-ros2 launch rospider_gazebo vslam.launch.py map:=room_vslam
+ros2 launch rospider_gazebo vslam.launch.py map:=room_vslam           # ใช้กล้องอย่างเดียว
+ros2 launch rospider_gazebo rtabmap_slam.launch.py map:=room1         # ใช้กล้อง + LiDAR
 ```
 
-V-SLAM รันด้วยไฟล์ของตัวเองทั้งหมด ไม่ยืมของ `rtabmap_slam` หรือของ Hiwonder:
+1. ขับหุ่นด้วย teleop ให้ทั่วห้อง
+2. กด **Ctrl+C** แล้วรอจนขึ้น `Saving database/long-term memory...done!` แผนที่จะถูกเซฟเป็น `.db` ลงใน `ROSpider/maps/` (ของ V-SLAM อยู่ใน `maps/vslam/`)
+3. โหลดแผนที่กลับมานำทาง:
+   ```bash
+   ros2 launch rospider_gazebo vslam.launch.py localization:=true map:=room_vslam
+   ```
 
-| ไฟล์ | ใช้ทำอะไร |
-|---|---|
-| `config/vslam.yaml` | ค่า RTAB-Map (มาจากค่าของ Hiwonder แต่ตัด LiDAR ออก) และค่าของ point cloud ที่ใช้หลบสิ่งกีดขวาง |
-| `config/vslam_nav2_params.yaml` | ค่า Nav2 ตอนนำทาง — หลบสิ่งกีดขวางด้วย depth camera |
-| `rviz/vslam.rviz` | RViz: ภาพกล้อง, point cloud 3D ของแผนที่, graph, แผนที่ 2D, costmap, เส้นทาง |
-| `ROSpider/maps/vslam/` | โฟลเดอร์แผนที่ของ V-SLAM |
+ข้อควรระวัง: การรันโหมดทำแผนที่ด้วยชื่อเดิมจะเขียนทับไฟล์เดิม (โหมดนำทางใช้สำเนาของแผนที่ ไฟล์เดิมไม่ถูกแก้)
 
-ไม่ใช้ LiDAR เลยทั้งตอนทำแผนที่และตอนนำทาง — RTAB-Map ใช้แค่ภาพสี + depth จาก depth camera และ odometry จาก `/odom`:
+**โจทย์ V-SLAM: สร้างแผนที่ด้วยกล้อง** (15–20 นาที)
 
-- ต่อแผนที่และหา loop closure จาก feature ในภาพ (ไม่ใช้ ICP ของ LiDAR)
-- แผนที่ 2D สร้างจาก depth (ตัดพื้นออก และไม่นับจุดที่ใกล้กว่า 0.2 ม. เพราะกล้องเห็นนิ้ว gripper)
-- แผนที่ 3D ถูกบันทึกตอนปิดลง `ROSpider/maps/vslam/room_vslam.db` (ไม่ใส่ `map:=` จะเป็น `maps/vslam/map.db`) — เริ่มรอบใหม่ด้วยชื่อเดิม ไฟล์เดิมจะถูกเขียนทับ
-
-### เรียกแผนที่ 3D กลับมาใช้นำทาง
+ใช้ห้องโจทย์เดิม (ผนังแต่ละด้านมีลายไม่ซ้ำกัน กล้องจะได้จำที่ได้) ค่าในไฟล์โจทย์ตั้งผิดไว้ 3 จาก 5 ค่า
 
 ```bash
-ros2 launch rospider_gazebo vslam.launch.py localization:=true map:=room_vslam
+ros2 launch rospider_gazebo vslam_challenge.launch.py map:=myvslam
 ```
 
-RTAB-Map โหลดแผนที่ 3D ทั้งหมดจากไฟล์ (ภาพ + point cloud) หาตำแหน่งตัวเองโดยเทียบภาพจากกล้องกับแผนที่ แล้วส่งแผนที่ 2D ที่ฉายจากแผนที่ 3D กับตำแหน่งหุ่นให้ Nav2 — กด **2D Goal Pose** ใน RViz เพื่อสั่งเดิน RViz แสดง point cloud 3D ของแผนที่ด้วย
+1. แก้ค่าใน `src/simulations/rospider_gazebo/config/vslam_challenge.yaml` แล้วปิด-เปิด launch ใหม่
+2. ขับด้วย teleop ให้ทั่วทั้งสองห้อง แล้วกลับมาที่จุดเริ่มและหันไปทางเดิม (หุ่นต้องกลับมาเห็นภาพเดิมถึงจะเกิด loop closure)
+3. กด **Ctrl+C** รอจนปิดเสร็จ แผนที่ถูกบันทึกตอนนี้
+4. ตรวจ: `ros2 run rospider_gazebo check_vslam.py myvslam`
 
-- โหมดนี้ไม่เพิ่มข้อมูลใหม่ลงแผนที่ และไม่ลบไฟล์ (โหมดทำแผนที่ต่างหากที่เริ่มไฟล์ใหม่ทุกครั้ง) แต่ตอนปิดยังเขียนข้อมูลบางส่วนลงไฟล์ — ถ้าต้องการต้นฉบับเดิมให้ copy เก็บไว้ก่อน
-- หาตำแหน่งด้วยกล้อง และ Nav2 หลบสิ่งกีดขวางด้วย depth camera (point cloud ขนาดเล็กที่สร้างจากภาพ depth ราว 2 พันจุด) — เห็นเฉพาะด้านหน้ากล้อง (~69°) ด้านข้างและด้านหลังมองไม่เห็น ต่างจาก LiDAR ที่เห็นรอบตัว
-- ใช้แผนที่จาก `vslam.launch.py` เท่านั้น — แผนที่จาก `rtabmap_slam.launch.py` ให้ใช้กับ `rtabmap_navigation.launch.py`
+ด่าน: 1 มีแผนที่และเห็นผนัง · 2 สำรวจครอบคลุม ≥ 90% · 3 แผนที่ไม่เบี้ยว (จำที่เดิมได้ ไม่จำผิดที่ ผนังไม่ซ้อน)
 
-ข้อจำกัด: หันเข้าหาผนังเรียบหรือใกล้ผนังมาก ภาพจะมี feature น้อยจนต่อแผนที่หรือหาตำแหน่งพลาดง่ายกว่าแบบมี LiDAR และ depth เห็นระยะสั้นกว่า LiDAR (sim ตั้งไว้ 8 ม. แผนที่ 2D ใช้ถึง 5 ม.)
-
-## 5. Navigation
+**โจทย์นำทางด้วย V-SLAM** (10 นาที) ใช้แผนที่ของตัวเองจากโจทย์ข้างบน ค่าตั้งผิดไว้ 2 จาก 6 ค่า เส้นทางและตัวตรวจเดียวกับโจทย์ Nav2
 
 ```bash
-ros2 launch rospider_gazebo navigation.launch.py
+ros2 launch rospider_gazebo vslam_nav_challenge.launch.py map:=myvslam
+ros2 run rospider_gazebo check_nav.py
 ```
 
-ใช้แผนที่ `rospider_room` ที่ทำจากห้อง sim ไว้แล้ว และตั้งตำแหน่งเริ่มต้นให้อัตโนมัติ (หุ่นเกิดที่ origin ของแผนที่) — กด **2D Goal Pose** ใน RViz เพื่อสั่งเดิน หรือ:
+แก้ค่าใน `src/simulations/rospider_gazebo/config/vslam_nav_challenge.yaml` หุ่นต้องเริ่มที่จุดเดียวกับตอนเริ่มทำแผนที่ (จุดเกิด)
+
+วิทยากร: แผนที่เฉลยสร้างด้วย `vslam_challenge.launch.py map:=vslam_answer params:=<path ของ config/vslam_challenge_solved.yaml>` แล้วรัน `python3 src/simulations/rospider_gazebo/tools/drive_route.py` (ขับเส้นทางเดิมให้เองประมาณ 5 นาที) ไฟล์เฉลยของโจทย์นำทางคือ `config/vslam_nav_challenge_solved.yaml`
+
+### Color Threshold Adjustment
+
+จูนช่วงสีในปริภูมิ LAB ด้วยหน้าต่าง LAB_Tool แบบเดียวกับที่ใช้บนหุ่นจริง
 
 ```bash
-ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
-  "{pose: {header: {frame_id: map}, pose: {position: {x: 0.9, y: 0.3}, orientation: {w: 1.0}}}}"
+ros2 launch rospider_gazebo depth_camera.launch.py   # terminal 1: เปิดกล้อง (Gazebo)
+ros2 launch rospider_gazebo lab_tool.launch.py       # terminal 2: เปิดหน้าต่างจูน
 ```
 
-ใช้แผนที่ของเราเอง: `map:=room1` (แผนที่ 2D ใน `ROSpider/maps/`) — ถ้าหุ่นไม่ได้เกิดที่ origin ของแผนที่ ให้ตั้งตำแหน่งด้วย **2D Pose Estimate**
+1. เลือกสีใน `Color list`
+2. เลื่อน slider `L` `A` `B` จนช่อง mask เห็นแค่วัตถุ
+3. กด **Save** ค่าจะถูกเก็บที่ `~/.ros/color_detect_tuned.json` และ terminal จะพิมพ์บล็อก YAML ไว้ให้วางลงใน `config/color_detect.yaml`
 
-ความเร็วและ footprint มาจาก config ของหุ่นจริง (`navigation/config`) — สูงสุด 0.05 ม./วิ. หุ่นจึงเดินช้า (เป้าหมายห่าง ~1 ม. ใช้เวลาราว 1 นาที) ต่างจากค่าของ Hiwonder 2 ค่าใน DWB คือ `xy_goal_tolerance` และ `sim_time` เพราะค่าเดิมทำให้หุ่นหยุดก่อนถึงเป้าหมายและ goal ไม่จบ (รายละเอียดที่หัวไฟล์ `src/simulations/rospider_gazebo/config/nav2_params.yaml`)
+**โจทย์: จูนสีให้เจอแค่กล่องที่ต้องการ** (10 นาที)
 
-ลองค่า Nav2 อื่นโดยไม่ต้อง build ใหม่: `params_file:=/abs/path/my_nav2_params.yaml`
-
-## บันทึกและเรียกใช้แผนที่
-
-แผนที่ทุกแบบเก็บไว้ใน workspace ที่ `ROSpider/maps/` ใส่แค่**ชื่อ**ใน `map:=` (ถ้าอยากใช้ไฟล์ที่อื่น ใส่ path ที่มี `/` ได้ เช่น `map:=$HOME/other/room.db`) — ตอนเริ่ม launch จะพิมพ์ path ของแผนที่ออกมาให้เห็น
-
-| แผนที่ | ทำด้วย | เรียกใช้ด้วย |
-|---|---|---|
-| 2D `room1.yaml` + `.pgm` | `map_saver_cli` ระหว่าง `slam` / `rtabmap_slam` / `vslam` | `navigation.launch.py map:=room1` |
-| 3D `room1.db` (กล้อง + LiDAR) | `rtabmap_slam.launch.py map:=room1` | `rtabmap_navigation.launch.py map:=room1` |
-| 3D `vslam/room_vslam.db` (กล้องอย่างเดียว) | `vslam.launch.py map:=room_vslam` | `vslam.launch.py localization:=true map:=room_vslam` |
-
-### แผนที่ 2D (`.yaml` + `.pgm`) — ใช้กับ Nav2 + AMCL (LiDAR)
-
-บันทึกระหว่างที่ launch ทำแผนที่ยังรันอยู่ (ขับให้ทั่วก่อน) — รันจากโฟลเดอร์ `ROSpider`:
+ฉากมีกล่องแดง เขียว น้ำเงิน กล่องน้ำเงินอีกกล่องอยู่ในเงา และกล่องสีส้มที่คล้ายสีแดง ช่วงสีที่ให้มาตั้งผิดไว้ทั้ง 3 สี
 
 ```bash
-cd ~/entech_hiwonder_ros2_ws/ROSpider
-ros2 run nav2_map_server map_saver_cli -f maps/room1 --ros-args -p use_sim_time:=true
+ros2 launch rospider_gazebo color_challenge.launch.py   # เปิดฉาก + หน้าต่าง LAB_Tool
+ros2 run rospider_gazebo check_color.py                 # ตรวจจากภาพกล้อง บอกผลทีละด่าน
 ```
 
-เรียกใช้:
+จูนใน LAB_Tool แล้วรันตัวตรวจได้เลยไม่ต้องปิด launch (ตัวตรวจใช้ค่าที่หน้าต่างแสดงอยู่ตอนนั้น) อย่าลืมกด **Save** (เก็บที่ `~/.ros/color_challenge_tuned.json` ทับค่าในไฟล์โจทย์ `config/color_challenge.yaml`) ไม่งั้นปิด launch แล้วค่าหาย ห้ามขับหุ่นระหว่างทำโจทย์ ตัวตรวจจะไม่ยอมตรวจถ้ากล้องไม่ได้เห็นฉากตามตำแหน่งเริ่มต้น — ด่าน: 1 เจอครบทุกสี · 2 ไม่จับของหลอก · 3 เจอแม้อยู่ในเงา — อยากเริ่มใหม่: ลบ `~/.ros/color_challenge_tuned.json` แล้วปิด-เปิด launch ใหม่
+
+### Color Tracking
+
+คลิกที่วัตถุในภาพ แล้วหุ่นจะเดินตามก้อนสีนั้น
 
 ```bash
-ros2 launch rospider_gazebo navigation.launch.py map:=room1
+ros2 launch rospider_gazebo gazebo.launch.py            # terminal 1
+ros2 launch rospider_gazebo object_tracking.launch.py   # terminal 2
 ```
 
-AMCL ตั้งตำแหน่งเริ่มต้นไว้ที่จุด (0, 0) ของแผนที่ = จุดที่หุ่นเกิดตอนเริ่มทำแผนที่ ถ้าไม่ตรง ให้กด **2D Pose Estimate** ใน RViz
+คลิกซ้ายที่วัตถุในหน้าต่าง `image` หุ่นจะเก็บสีใต้เมาส์ แล้วเดินตามให้วัตถุอยู่ที่จุดสีเหลือง ถ้าจับสีได้กว้างหรือแคบเกินไป ให้ปรับด้วย `threshold:=0.3`
 
-### แผนที่ 3D (`.db`) — RTAB-Map
+**โจทย์: เดินไปหยุดหน้าลูกบอลสีแดง** (10 นาที)
 
-ขับให้ทั่วแล้วปิด launch ทำแผนที่ด้วย **Ctrl+C** และรอจนขึ้น `Saving database/long-term memory...done!` — ไฟล์ `.db` ถูกเขียนตอนปิดเท่านั้น จากนั้นเรียกใช้ด้วยคำสั่งในตารางด้านบน
-
-- **อย่า copy ไฟล์ `.db` ระหว่างที่ RTAB-Map ยังรันอยู่** ไฟล์ที่ได้จะเสีย (`database disk image is malformed`)
-- ในไฟล์ `.db` มีแผนที่ 2D อยู่ด้วย ถ้าอยากใช้กับ `navigation.launch.py` ให้รันโหมดโหลดแผนที่แล้วสั่ง `map_saver_cli` ตามด้านบน
-
-### git
-
-ไฟล์ `.db` ใหญ่หลายสิบถึงหลายร้อย MB (GitHub รับไฟล์ละไม่เกิน 100 MB) จึงถูก ignore ไว้ใน `ROSpider/.gitignore` — แผนที่ 2D ไฟล์เล็ก commit ได้ตามปกติ ถ้าต้องการแชร์ไฟล์ `.db` ให้ใช้ Git LFS หรือส่งไฟล์แยก
-
-## 6. MoveIt ใน Gazebo
+ฉากมีลูกบอลสีแดง (ต้องไปหา) กับลูกบอลสีส้ม (ห้ามไปหา) หุ่นต้องหยุดตรงหน้าลูกบอลแดงที่ระยะ 0.43–0.52 ม. ภายใน 40 วินาที ค่าตั้งผิดไว้ 3 จาก 4 ค่า
 
 ```bash
-ros2 launch rospider_gazebo moveit.launch.py
+ros2 launch rospider_gazebo track_challenge.launch.py   # ฉาก + หน้าต่าง image (หุ่นยังไม่เดิน)
+ros2 run rospider_gazebo check_track.py                 # ตัวตรวจคลิกเลือกสีลูกบอลแดงและสั่งเดินให้เอง
 ```
 
-RViz จะเปิดแท็บ MotionPlanning — เลือก planning group `arm` หรือ `gripper` แล้ว Plan & Execute แขนใน Gazebo จะขยับตาม และภาพกล้อง (ติดอยู่บนแขน) เปลี่ยนตาม
+แก้ค่าใน `src/simulations/rospider_gazebo/config/track_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (คลิกในหน้าต่างเพื่อดูว่าสีจับอะไรได้ แต่หุ่นจะไม่เดินจนกว่าตัวตรวจสั่ง) — ด่าน: 1 เดินไปหาลูกบอลสีแดง · 2 หยุดหน้าลูกบอลพอดี · 3 ทันเวลา
 
-## 7. หยิบและวางวัตถุ (pick and place)
+### AprilTag Tag Tracking
+
+หุ่นเดินเข้าหาป้าย AprilTag ที่เลือก แล้วหยุดที่ระยะที่ตั้งไว้ ในห้อง sim มีป้ายหมายเลข 1 ติดไว้ให้แล้ว
 
 ```bash
-export need_compile=True
-ros2 launch rospider_gazebo pick_place.launch.py
+ros2 launch rospider_gazebo gazebo.launch.py                                  # terminal 1
+ros2 launch rospider_gazebo apriltag_track.launch.py target_tag:=1 stop_distance:=0.35   # terminal 2
 ```
 
-หุ่นยืนอยู่กับที่ ก้มแขนมองหาลูกบาศก์สีบนแท่นด้วยกล้อง RGB-D ที่ติดอยู่บนแขน แล้วหยิบไปวางเรียงกันทีละลูกที่อีกจุดหนึ่งหน้าหุ่น การตรวจจับสีใช้ OpenCV แยกสีในปริภูมิ HSV (`scripts/color_detect.py`, ค่าปรับที่ `config/color_detect.yaml`) แล้วส่งผลออกทาง `/yolo/object_detect` (`interfaces/ObjectsInfo`) — หัวข้อและชนิดข้อความเดียวกับ `yolo_node.py` ของหุ่นจริง จึงเปลี่ยนไปใช้ YOLO จริงภายหลังได้โดยไม่ต้องแก้โค้ดส่วนหยิบ-วาง (`scripts/pick_and_place.py`)
+**โจทย์: เดินไปหยุดหน้าป้ายหมายเลข 2** (10 นาที)
 
-ไม่ใช้ MoveIt ในเส้นทางหยิบ-วาง: คุมด้วย IK ปิดรูปเอง (`arm_ik.py`) แทน เพราะ `robot_moveit_config` ตั้ง `position_only_ik: true` (คุมได้แค่ตำแหน่งปลายมือ ไม่คุมทิศทาง) แต่การก้มลงหยิบต้องคุมมุมมือด้วย ส่วนการ "จับ" ลูกบาศก์ใช้ `DetachableJoint` เชื่อมลูกบาศก์เข้ากับ `link5` (มือจับ) แทนแรงเสียดทานจริง
-
-รันทีละสี:
+ฉากมีป้าย 3 ป้าย หุ่นต้องเดินไปหยุดหน้าป้ายหมายเลข 2 ในระยะที่แขนหยิบของบนแท่นได้ (กล้องห่างป้ายประมาณ 0.30–0.40 ม.) ภายใน 40 วินาที ค่าตั้งผิดไว้ 3 จาก 4 ค่า
 
 ```bash
-ros2 launch rospider_gazebo pick_place.launch.py auto_start:=false
-ros2 service call /pick_and_place/start interfaces/srv/SetString "{data: 'red'}"
-ros2 service call /pick_and_place/stop std_srvs/srv/Trigger
+ros2 launch rospider_gazebo apriltag_challenge.launch.py   # ฉาก + หน้าต่าง image (หุ่นยังไม่เดิน)
+ros2 run rospider_gazebo check_tag.py                      # ตัวตรวจสั่งเดินเองแล้วบอกผลทีละด่าน
 ```
 
-### หยิบ → ขับไปที่อื่น → สั่งวาง
+แก้ค่าใน `src/simulations/rospider_gazebo/config/apriltag_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง — ด่าน: 1 ไปหาป้ายหมายเลข 2 · 2 หยุดระยะพอดี · 3 ทันเวลา
 
-`~/start` เป็นวงจรอัตโนมัติก้อนเดียว ไม่มีจังหวะให้แทรก ถ้าอยากคุมเองว่าจะวางตอนไหนให้ใช้คู่ `~/pick` กับ `~/place` แทน — หยิบแล้วหุ่นจะ **ถือค้างไว้** จนกว่าจะสั่งวาง ระหว่างนั้นขับไปไหนก็ได้
+### Autonomous Line Following
 
-**terminal 1** เปิดซิม (ต้อง `auto_start:=false` ไม่งั้นวงจรอัตโนมัติจะแย่งหยิบไปก่อน)
+หุ่นเดินตามเส้นบนพื้น launch นี้เปิด Gazebo ให้เอง ในฉากที่มีเส้นดำเป็นลูป และหุ่นเกิดบนเส้นพอดี
 
 ```bash
-export need_compile=True
-ros2 launch rospider_gazebo pick_place.launch.py auto_start:=false
+ros2 launch rospider_gazebo line_following.launch.py
 ```
 
-**terminal 2** สั่งหยิบ แล้วมันจะยกขึ้นท่าถือและค้างรอ
+คลิกซ้ายที่เส้นในหน้าต่าง `image` แล้วหุ่นจะเริ่มเดิน ถ้ามีสิ่งกีดขวางอยู่ใกล้กว่า 0.4 ม. หุ่นจะหยุดรอ วิ่งครบหนึ่งรอบใช้เวลาประมาณ 2 นาที
+
+**โจทย์: ให้หุ่นเกาะเส้นครบรอบทันเวลา** (10 นาที)
+
+ค่าของตัวเกาะเส้นตั้งผิดไว้ 2 จาก 4 ค่า แก้จนหุ่นวิ่งครบรอบภายใน 200 วินาที
 
 ```bash
-ros2 service call /pick_and_place/pick interfaces/srv/SetString "{data: 'red'}"
+ros2 launch rospider_gazebo line_challenge.launch.py   # ฉากเส้น + หน้าต่าง image
+ros2 run rospider_gazebo check_line.py                 # ตัวตรวจเลือกสีเส้นและสั่งวิ่งให้เอง
 ```
 
-**terminal 3** ขับหุ่นไปจุดที่อยากวาง
+แก้ค่าใน `src/simulations/rospider_gazebo/config/line_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (หุ่นต้องเริ่มที่จุดเกิดบนเส้น) — ด่าน: 1 เกาะเส้นได้ 1/4 รอบ · 2 วิ่งครบรอบ · 3 ครบรอบทันเวลา
+
+### 3D Vision: Object Grasping
+
+หุ่นติดตามก้อนสีด้วยกล้องบนแขน แล้วหยิบขึ้นมา launch นี้เปิดทุกอย่างให้เอง (Gazebo, แท่นวาง, ลูกบาศก์ และ node หยิบ)
 
 ```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/controller/cmd_vel
+ros2 launch rospider_gazebo track_and_grab.launch.py
 ```
 
-**terminal 2** สั่งวาง — เว้น `data` ว่างไว้จะวางตรงกลางหน้าหุ่น ณ ตำแหน่งที่ยืนอยู่ตอนนั้น
+ในหน้าต่างควบคุม กดปุ่มสี (red / green / blue) เพื่อสั่งหยิบ ตัวเลือกในหน้าต่าง:
+- **pick here**: หยิบก้อนที่อยู่ตรงหน้า (ก้อนเขียว)
+- **walk to it**: เดินไปหาก้อนสีนั้นก่อนแล้วค่อยหยิบ (ก้อนแดงและน้ำเงินวางอยู่ด้านข้าง)
+- **place: auto**: วางลงข้างตัวทันทีที่หยิบได้
+- **place: by button**: ถือไว้จนกว่าจะกดปุ่ม **Place**
+
+**โจทย์: หยิบบล็อกสีน้ำเงินไปวางบนแผ่นสีเหลือง** (15 นาที)
+
+บล็อกสีน้ำเงินอยู่บนแท่นทางขวาของหุ่น ไกลเกินแขนเอื้อม หุ่นต้องเดินไปหยิบ แล้ววางลงบนแผ่นสีเหลืองที่พื้น ค่าตั้งผิดไว้ทั้ง 3 ค่า
 
 ```bash
-ros2 service call /pick_and_place/place interfaces/srv/SetString "{data: ''}"
+ros2 launch rospider_gazebo grasp_challenge.launch.py   # ฉาก + หน้าต่าง track_and_grab
+ros2 run rospider_gazebo check_grasp.py                 # ตัวตรวจสั่งหยิบบล็อกสีน้ำเงินให้เอง (ราว 1 นาที)
 ```
 
-หรือระบุพิกัดเองเป็น `"x y z"` เมตร เทียบ `base_footprint` (คือเทียบตัวหุ่น ไม่ใช่พิกัดโลก) เช่นวางเยื้องไปทางซ้าย 6 ซม. โดยไม่ต้องขยับหุ่น:
+แก้ค่าใน `src/simulations/rospider_gazebo/config/grasp_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (หุ่นและบล็อกต้องอยู่ที่เดิม) — ด่าน: 1 เดินไปถึงบล็อก · 2 หยิบขึ้นมา · 3 วางบนแผ่นสีเหลือง
+
+### 3D Vision: Shape Recognition
+
+ใช้ภาพ depth แยกรูปทรงของวัตถุ (ทรงกลม ทรงกระบอก กล่อง) และบอกสี ใน sim ทำได้แค่ตรวจจับและรายงานผล ยังไม่หยิบไปแยกใส่ถาด
 
 ```bash
-ros2 service call /pick_and_place/place interfaces/srv/SetString "{data: '0.17 0.06 0.035'}"
+ros2 launch rospider_gazebo pick_place.launch.py auto_start:=false    # terminal 1: ฉากที่มีของวาง
+ros2 launch rospider_gazebo object_classification.launch.py           # terminal 2
 ```
 
-`z` คือ**ความสูงที่ปล่อยมือ** ไม่ใช่ความสูงที่ลูกบาศก์จะไปนอน ค่า default `0.035` = จุดศูนย์กลางลูกบาศก์ตอนนอนบนพื้น (0.025) + ระยะปล่อย 1 ซม. ถ้าจะวางกลับขึ้นแท่นสูง 8 ซม. ให้ใส่ราว `0.135` แทน ปล่อยจากสูงเกินไปลูกบาศก์จะกระเด้ง — ตอนทดสอบใช้ 0.135 บนพื้น (ตก 11 ซม.) เด้งออกไป 2-6 ซม. ถ้าใส่ `z` ต่ำกว่าพื้นผิวที่อยู่ข้างล่าง มือจะกดลูกบาศก์ลงไป (มือไม่มี collision แต่ลูกบาศก์มี) ปกติมันจะไปนอนบนพื้นผิวนั้นเอง — ทดสอบแล้ว วางด้วยค่า default ขณะยังอยู่เหนือแท่น ลูกบาศก์นอนบนแท่นที่ 0.105 ถูกต้อง คลาดเคลื่อน 2.3 ซม. แต่ถ้าจุดนั้นมีของอยู่แล้วลูกบาศก์จะถูกบีบกระเด็นออกข้าง — อีกการทดสอบวางสองลูกห่างกัน 5.5 ซม. (น้อยกว่าความกว้าง 5 ซม. บวกระยะเผื่อ) ลูกที่สองกระเด็นไป 10 ซม. ตกจากแท่น สรุป: ใส่ `z` ให้ตรงกับพื้นผิวที่จะวาง และเว้นที่รอบจุดวางไว้
+ถ้าตรวจไม่เจอ ให้วัดระยะพื้นหนึ่งครั้งด้วย `debug:=true` แล้วนำค่าที่ log บอกไปใส่ใน `plane_distance:=...` (หน่วยเป็นมิลลิเมตร)
 
-วนซ้ำ `pick` → ขับ → `place` ได้เรื่อย ๆ เสร็จแล้วโหนดกลับไป `IDLE` รอคำสั่งถัดไป (ไม่ไล่หยิบสีอื่นต่อเอง)
+**โจทย์: ให้หุ่นหาลูกบอลให้เจอ** (10 นาที)
 
-**สิ่งที่ควรรู้**
-
-- ทุก service คืน `success` กับ `message` เสมอ สั่ง `place` ตอนไม่ได้ถืออะไร หรือ `pick` ตอนถืออยู่แล้ว หรือพิมพ์พิกัดที่แขนเอื้อมไม่ถึง จะได้ `success: false` พร้อมเหตุผล
-- ตอนถืออยู่ **ไม่มี timeout** ขับนานแค่ไหนก็ได้ (สถานะอื่นมี timeout 15 วิ)
-- ลูกบาศก์ถูก weld กับ `link5` จึงติดไปกับหุ่นเอง และท่าถือยกไว้สูง 0.22 ม. พ้นแท่นและพ้นขา
-- `~/stop` ระหว่างถืออยู่จะปล่อยของลงตรงนั้น ไม่ค้างติดมือ
-
-### วางเรียงแถว ไม่ซ้อนกัน
-
-ช่องวางทั้งสามอยู่ที่ (0.160, +0.07, 0.135), (0.160, 0.00, 0.135), (0.160, -0.07, 0.135) ใน `base_footprint` (`config/pick_place.yaml`, `drop_slots`) เติมตามลำดับที่หยิบสำเร็จ ไม่ใช่ตำแหน่งคงที่ต่อสี ที่วางเรียงแทนที่จะซ้อนสามชั้นเพราะแขนสั้นเกินไป: ที่ความสูงซ้อนชั้นที่สาม มีแค่มุมก้ม 50-60 องศาที่ยังแก้ IK ได้ และมุมป้านขนาดนั้นต้องกวาดลูกบาศก์ที่ถืออยู่ผ่านลูกบาศก์ที่วางไว้แล้วในแนวราบ ผลวัดจริง: ลูกบาศก์แต่ละลูกห่างจากช่องของตัวเองไม่เกิน ~0.9 ซม.
-
-### กล้องเห็นลูกบาศก์สีเดียวกันสองลูก
-
-`/yolo/object_detect` รายงานวัตถุ 6 ชิ้น ไม่ใช่ 3 ชิ้น: `worlds/rospider_room.sdf` มีลูกบาศก์ตกแต่ง (visual-only ไม่มี collision) สีแดง/เขียว/น้ำเงินอยู่ที่ x=0.55 อยู่ก่อนแล้ว เป็นสีและขนาด (5 ซม.) เดียวกับลูกบาศก์ที่หยิบได้จริงที่ x=0.235 ทุกประการ `pick_and_place.py` เลือกกล่องที่ใหญ่ที่สุดต่อสีก่อน แล้วยืนยันด้วย IK ว่าจุดนั้นแขนเอื้อมถึงจริง — พฤติกรรมนี้เกิดบนหุ่นจริงด้วยเช่นกัน ใครอ่าน `/yolo/object_detect` ต่อจากนี้ต้องรู้ไว้
-
-### ต้อง detach ก่อนสั่งแขน
-
-Gazebo เชื่อมลูกบาศก์ทั้งสามเข้ากับมือจับ (`link5`) ทันทีตอนสแปวน์ (ก่อนโค้ดฝั่งเราสั่งอะไรเลย) `pick_and_place.py` จึงสั่ง detach ทั้งสามสีซ้ำด้วยตัวจับเวลาตอนเริ่มโหนด (ราว 3 วิ) และค้างสถานะ `IDLE` ไม่สั่งแขนจนกว่าขั้นนี้จะจบ — ข้ามขั้นนี้ไม่ได้ ไม่งั้นคำสั่งแขนแรกจะลากทั้งฉาก (แท่น+ลูกบาศก์) หลุดจากจุดตั้ง ใครเขียนโหนดอื่นที่ขยับแขนตัวนี้ต้องเจอเรื่องเดียวกัน
-
-### ปรับค่า
-
-- ช่วงสี HSV: `config/color_detect.yaml` ดูผลได้จากภาพ `/color_detect/image_result` ใน RViz หรือจูนสด ๆ ด้วย slider (หัวข้อถัดไป)
-- ท่ามอง (`look_pose`), มุมเข้าหยิบ, ตำแหน่งช่องวาง (`drop_slots`): `config/pick_place.yaml` — `grasp_z_offset` ไม่ใช่แค่ครึ่งความสูงลูกบาศก์ เพราะจากมุมมองก้มชัน กล่องที่ตรวจจับได้คลุมทั้งหน้าบนและหน้าหน้า (foreshortened) จุดศูนย์กลางกล่องจึงตกที่ขอบบนใกล้กล้อง ไม่ใช่กึ่งกลางหน้าบน ต้องชดเชยด้วยค่านี้ ค่าที่ตั้งไว้แก้ z-bias เท่านั้น — ยังเหลือ x-bias ประมาณ 8 มม. ที่**ตั้งใจไม่แก้** (ดูคอมเมนต์ของ `grasp_z_offset` ในไฟล์เดียวกัน) อย่าปรับ `grasp_z_offset` เพื่อไล่ตาม x-bias นี้ ไม่งั้นจะกลับไปชนบั๊ก "แก้ค่าเดียวกันซ้ำสองที่" ที่เคยเจอและแก้ไปแล้วในสาขานี้
-- ตำแหน่งแท่นและลูกบาศก์: คีย์ `scene` ใน `config/pick_place.yaml` (ไม่ใช่ตัวแปรแยกใน launch file อีกต่อไป) — ทั้ง `launch/pick_place.launch.py` และ `test/test_arm_ik.py` อ่านจากที่เดียวกันนี้ ถ้าย้ายตำแหน่งเพียงแก้ที่ `scene` แล้วรัน
-  `colcon test --packages-select rospider_gazebo` เพื่อยืนยันว่ายังอยู่ในระยะที่แขนเอื้อมถึง
-
-### จูนช่วงสี HSV ด้วย slider
+บนพื้นใต้กล้องมีลูกบอล (ทรงกลม) กล่อง และทรงกระบอก หุ่นต้องแยกวัตถุออกจากพื้น เห็นครบทั้ง 3 ชิ้นพร้อมเรียกชื่อรูปทรงถูก แล้วเลือกลูกบอล (กรอบสีแดงในหน้าต่าง `depth`) ค่าตั้งผิดไว้ทั้ง 3 ค่า
 
 ```bash
-ros2 launch rospider_gazebo pick_place.launch.py tune:=true
+ros2 launch rospider_gazebo shape_challenge.launch.py   # ฉาก + หน้าต่าง depth
+ros2 run rospider_gazebo check_shape.py                 # ตรวจจากผลที่หุ่นรายงาน บอกผลทีละด่าน
 ```
 
-เปิดหน้าต่าง `color_detect tune` ขึ้นมาอีกบาน ซ้ายคือภาพที่วาดกรอบแล้ว ขวาคือ mask ของสีที่กำลังเลือก และแถบล่างบอกค่าจริงที่ใช้อยู่ ระหว่างจูนโหนดยัง publish `/yolo/object_detect` ตามปกติ จึงเห็นผลของ slider ต่อการตรวจจับได้ทันที
-
-slider เรียงตามนี้: `colour` (0=แดง 1=เขียว 2=น้ำเงิน และ**ช่องสุดท้ายคือ "เพิ่มสีใหม่"** ดูหัวข้อถัดไป), `band` (สีแดงคร่อมจุดเริ่มของ hue จึงมีสองช่วง สีอื่นมีช่วงเดียว ค่านี้จะถูกบังคับเป็น 0), `H lo` / `H hi` (0-179), `S lo` / `S hi`, `V lo` / `V hi` (0-255), `min_area`, `kernel` (บังคับเป็นเลขคี่)
-
-ปุ่มลัด:
-
-| ปุ่ม | ทำอะไร |
-|---|---|
-| `n` | เพิ่มสีใหม่ (เหมือนเลื่อน `colour` ไปช่องสุดท้าย) พิมพ์ชื่อแล้ว enter (esc = ยกเลิก) |
-| `s` | เซฟค่าปัจจุบันลง `~/.ros/color_detect_tuned.json` |
-| `r` | ย้อนกลับไปค่าใน `config/color_detect.yaml` |
-| `y` | พิมพ์ค่าปัจจุบันออกทาง log เป็นบล็อก YAML พร้อมวางกลับเข้าไฟล์ config |
-| `q` | ปิดหน้าต่าง (โหนดยังตรวจจับต่อ) |
-
-### เพิ่มสีใหม่และตั้งชื่อเอง
-
-slider `colour` มีช่องเกินมาหนึ่งช่องเสมอ: **เลื่อนไปขวาสุดจนเลยสีสุดท้าย = เพิ่มสีใหม่** (เช่นมี 3 สี ช่อง 0-2 คือสีที่มีอยู่ ช่อง 3 คือ "เพิ่มสีใหม่") พอเลื่อนถึงช่องนั้นจะเข้าโหมดตั้งชื่อทันที หรือกด `n` ก็ได้ผลเดียวกันโดยไม่ต้องเลื่อน
-
-ชื่อจะโชว์อยู่แถบล่างภาพระหว่างพิมพ์ กด enter เพื่อยืนยัน หรือ esc เพื่อยกเลิก — หรือ**เลื่อน `colour` กลับไปสีใดก็ได้ก็ยกเลิกเหมือนกัน** ตำแหน่ง slider คือตัวกำหนดโหมด อยู่ช่องสุดท้าย = กำลังตั้งชื่อ ไม่อยู่ = เลือกสีตามปกติ ทั้งสองอย่างจึงขัดกันไม่ได้
-
-ตอนอยู่ช่อง "เพิ่มสีใหม่" พาเนลขวาจะเขียนว่า `+ new colour` และโชว์ **mask ตัวอย่างสด ๆ ของสีที่กำลังจะสร้าง** — ลาก `H/S/V` แล้วเห็นผลทันทีโดยที่ยังไม่ต้องตั้งชื่อ พอกด enter สีใหม่จะถูกสร้างด้วยค่าที่จูนไว้ตรงนั้นเลย ไม่ใช่ค่าตั้งต้น ลำดับการใช้งานจึงเป็น **เล็งของ → ลากจนเห็น mask ถูก → ค่อยตั้งชื่อ**
-
-ค่าเริ่มต้นตอนเข้าช่องนี้จะเปิดกว้างสุด (`H 0-179, S 80-255, V 60-255`) ให้เห็นเกือบทุกอย่างก่อน แล้วไล่แคบ `H` ลงมาหาเป้า mask ตัวอย่างนี้ไม่ถูก publish ออก `/yolo/object_detect` เพราะยังไม่มีชื่อ
-
-`min_area` กับ `kernel` เป็นค่าของตัวตรวจจับทั้งตัว ไม่ใช่ของสีใดสีหนึ่ง จึงทำงานตลอดเวลารวมถึงตอนอยู่ช่องนี้ด้วย ใช้ได้เฉพาะ `a-z`, `0-9` และ `_` ยาวไม่เกิน 24 ตัว (ชื่อนี้กลายเป็น `class_name` บน `/yolo/object_detect` และเป็นคีย์ใน YAML จึงจำกัดไว้เท่าที่ทั้งสองที่รับได้โดยไม่ต้อง quote) ชื่อซ้ำหรือชื่อว่างจะถูกปฏิเสธพร้อมขึ้น log บอก
-
-พอยืนยันแล้วโหนดจะสลับไปที่สีใหม่ให้เลย พร้อมค่าที่จูนไว้ในขั้น preview กรอบที่วาดให้สีใหม่จะใช้สีตามค่า hue กึ่งกลางของช่วงที่ตั้งไว้ ไม่ต้องกำหนดเอง
-
-สีใหม่เริ่มด้วย **1 ช่วง (band)** ซึ่งพอสำหรับเกือบทุกสี มีแค่โทนแดงเท่านั้นที่คร่อมจุดเริ่มของ hue จนต้องใช้ 2 ช่วง — และสีแดงมีอยู่แล้ว ถ้าต้องการสีใหม่ที่คร่อม hue จริง ๆ ให้ใส่ 6 ตัวเลขใน `lower`/`upper` ของไฟล์ YAML แทน (ดูรูปแบบของ `red`)
-
-กด `s` เพื่อให้สีใหม่อยู่รอดข้ามการรีสตาร์ต (เซฟลง JSON พร้อมรายชื่อสีทั้งหมด) หรือ `y` เพื่อเอาไปวางใน `config/color_detect.yaml` ซึ่งเป็นไฟล์ที่ commit จริง หมายเหตุ: `r` ย้อนกลับไปค่าใน YAML จึงทิ้งสีที่เพิ่งเพิ่มไปด้วย
-
-**ลำดับความสำคัญของค่า:** `config/color_detect.yaml` คือค่าที่ commit ไว้ ส่วนไฟล์ JSON เป็นตัวทับชั่วคราวสำหรับจูน ถ้ามีไฟล์ JSON อยู่ โหนดจะโหลดมาทับตอนเริ่ม **และขึ้น log เตือนว่ากำลังใช้ไฟล์ไหน** — กัน JSON เก่าค้างแล้วทับ YAML แบบเงียบ ๆ จนไล่หาไม่เจอ ลบไฟล์ JSON ทิ้งเพื่อกลับไปใช้ค่าใน YAML และใช้ปุ่ม `y` ย้ายค่าที่พอใจแล้วกลับเข้า YAML ซึ่งเป็นไฟล์ที่ commit จริง
-
-เปลี่ยนที่เก็บไฟล์ได้ที่พารามิเตอร์ `tuned_path` (เช่นชี้เข้ามาใน repo ถ้าอยากให้ commit ตามไปด้วย)
-
-> ถ้าป้ายชื่อ slider ว่างเปล่า แปลว่า OpenCV ตัวที่ติดตั้งไม่มีฟอนต์ของ Qt ติดมาด้วย (โหนดจะขึ้น log เตือนพร้อมคำสั่งแก้ให้) แก้ได้ด้วย:
-> ```bash
-> CV2=$(python3 -c "import cv2,os;print(os.path.dirname(cv2.__file__))")
-> mkdir -p $CV2/qt/fonts && cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf $CV2/qt/fonts/
-> ```
-> ถึงป้ายจะว่าง แถบค่าที่วาดอยู่ล่างภาพก็ยังบอกค่าจริงครบ จูนต่อได้อยู่ดี
-
-### ก่อนรัน
-
-ถ้ารันซ้ำหลายรอบ เช็กก่อนว่าไม่มี `sim_gait.py`, `robot_state_publisher` หรือ `gz sim` ค้างจากรอบก่อน (เคยทำให้ `arm_controller` มา activate ช้าจนหยิบไม่ทันแล้ว timeout ทุกสี) และถ้าเพิ่งรันคำสั่ง ROS CLI สั้น ๆ ไปหลายครั้งติดกัน ให้ลอง `rm -f /dev/shm/fastrtps_*` ถ้า node ใหม่หา node อื่นไม่เจอ (shared-memory ค้างจาก process ที่ตายไปแล้ว)
-
-### ตรวจสอบว่าทำงานถูกต้อง
-
-1. แท่นไม่ทับขาหุ่นและไม่ซ้อน `sim_skid_link` ลูกบาศก์วางนิ่งบนแท่น
-2. `/color_detect/image_result` วาดกรอบครบทุกสี **กรอบเดียวต่อสี** จากท่ามอง (`joint4 = -1.55`) — ที่มุมก้มนี้ลูกบาศก์ตกแต่งที่ x=0.55 หลุดพ้นกรอบภาพไปทั้งหมด (คำนวณจากเรขาคณิตกล้อง) จึงไม่มีกรอบที่สองให้เห็น ยืนยันจาก `/yolo/object_detect` จริงบนฉากที่ยังไม่ถูกแตะต้อง: `red [69,110,234,262]`, `green [257,110,390,262]`, `blue [411,110,578,262]` — สามกรอบพอดี ไม่ใช่หก ถ้าเห็น**สองกรอบต่อสี**แสดงว่าแขนยังไม่ถึงท่ามอง (เช่น ยังอยู่ที่ท่าเริ่มต้น `init` ซึ่งก้มน้อยกว่า ลูกบาศก์ตกแต่งจะกลับเข้ามาในเฟรม — ดูหัวข้อ "กล้องเห็นลูกบาศก์สีเดียวกันสองลูก" ด้านบน)
-3. ตำแหน่งที่ล็อกไว้ (ดูใน log ของ `pick_and_place`) ห่างจากตำแหน่ง spawn จริงไม่เกิน ~1 ซม.
-4. `/grasp/<สี>/attach` ทำให้ลูกบาศก์ติดมือ และ `detach` ทำให้ตก
-5. ลูกบาศก์ทั้งสามลูกไปอยู่ในช่องวางของตัวเอง (`drop_slots`) ห่างจากจุดกึ่งกลางช่องไม่เกิน 3 ซม. (วัดจริงซ้ำสองรอบได้ ~0.9 ซม.)
-
-## 8. AprilTag (ตรวจจับป้ายและหาตำแหน่ง 3 มิติ)
-
-ป้าย AprilTag บอกสองอย่าง: **มันคือป้ายหมายเลขอะไร** และ **มันอยู่ตรงไหนเทียบกับกล้อง** อย่างที่สองมีประโยชน์กว่ามาก เพราะได้ท่าทาง 6 แกนที่เอาไปจัดตำแหน่งหุ่นหรือวางของได้
-
-```bash
-ros2 launch rospider_gazebo pick_place.launch.py arm_pose:=horizontal
-```
-
-> **`arm_pose:=horizontal` สำคัญมาก** กล้องติดอยู่บนแขน ท่าเริ่มต้น `init` ก้มลงพื้น 52° ซึ่งเป็นท่าที่ใช้หยิบของ แต่มองไม่เห็นป้ายที่ตั้งอยู่ ถ้าลืมใส่จะไม่เจอป้ายเลยและดูเหมือนตัวตรวจจับพัง
-
-### ดูผลลัพธ์
-
-```bash
-ros2 topic echo /apriltag_detect/apriltag_info --once
-```
-```
-data:
-- id: 0      # หมายเลขป้าย
-  x: 320     # จุดกึ่งกลางป้ายในภาพ (พิกเซล)
-  y: 310
-  w: 80      # ความกว้างป้ายในภาพ (พิกเซล)
-  d: 876     # ระยะห่าง (มิลลิเมตร)
-```
-
-ท่าทาง 6 แกนออกมาเป็น TF ชื่อ `tag_<id>`:
-
-```bash
-ros2 run tf2_ros tf2_echo depth_cam_frame tag_0 --ros-args -p use_sim_time:=true
-```
-```
-- Translation: [0.000, 0.131, 0.876]
-```
-
-อ่านค่าใน optical frame: **z คือระยะไปข้างหน้า**, x คือซ้าย-ขวา, y คือบน-ล่าง (y บวก = ต่ำกว่ากล้อง) ดูภาพที่วาดกรอบและแกนแล้วได้ที่ `/apriltag_detect/image_result`
-
-> ต้องใส่ `-p use_sim_time:=true` ไม่งั้น `tf2_echo` ใช้เวลาของเครื่องไปหา TF ที่ประทับเวลาของซิม แล้วจะหาไม่เจอตลอด
-
-### จูน detector และกำหนดพฤติกรรมต่อป้าย (`tune:=true`)
-
-```bash
-ros2 launch rospider_gazebo pick_place.launch.py scene:=false tune:=true arm_pose:=horizontal auto_start:=false
-```
-
-`scene:=false` ข้ามการ spawn แท่นหยิบกับลูกบาศก์ — ใช้ตอนสาธิตแค่ป้าย (`approach`/`stop`) เพราะตำแหน่ง spawn ของหุ่นอยู่ห่างแท่นหยิบแค่ 1 ซม. เดินหน้าจากตรงนั้นชนแท่นแล้วตัวเอียงทันที ถ้าจะสาธิต `place` (ต้องหยิบลูกบาศก์ก่อน) ให้ตัด `scene:=false` ออกแล้วใช้ฉากเต็ม
-
-เปิดหน้าต่าง `apriltag_detect tune` (Tk) ค่าเริ่มต้นเป็น **simple view** พอสำหรับกิจกรรม 10 นาที: เห็นป้าย → รู้ id กับระยะ → สั่งหุ่นว่าจะทำอะไรกับป้ายนั้น
-
-| ส่วน | มีอะไร |
-|---|---|
-| ภาพซ้าย | overlay กล้องพร้อมกรอบและแกนของป้ายที่เห็น |
-| **Tags** | แถวละหนึ่ง id: `action` (`none`/`approach`/`place`/`stop`) และ `standoff` (เมตร) แถวมาจาก `behaviors:` ใน YAML บวก id ที่เพิ่งเห็นจะโผล่มาเอง (ตั้งต้นที่ `none`) หรือพิมพ์เลขที่ช่อง **add id** แล้วกดปุ่ม |
-| checkbox **Enable behaviors** | เปิด/ปิดพฤติกรรมทั้งหมด |
-| บรรทัด status | ข้อความจาก `TagBehavior` (เช่น `tag 0: reached`) ต่อด้วยคำตอบล่าสุดของ `/pick_and_place/place` |
-| ปุ่มล่าง | **Save** เซฟลง `~/.ros/apriltag_tuned.json` (เปลี่ยนที่เก็บด้วยพารามิเตอร์ `tuned_path`), **Revert** กลับไปค่าใน `config/apriltag.yaml`, **Print YAML** พิมพ์ค่าปัจจุบันเป็นบล็อก YAML ลง terminal เอาไปวางในไฟล์ได้เลย |
-| ปุ่ม **Advanced ▸** | กดเพื่อเผยอีกสอง panel: **Detector** (slider ของ `cv2.aruco.DetectorParameters` — `thresh win min/max/step`, `thresh constant`, `min perimeter rate`, `polygon accuracy`, `corner refinement` none/subpix — บวก `max reproj error px`, เปลี่ยนแล้วมีผลกับเฟรมถัดไปทันที) และ **Control** (9 ค่า: `max_linear max_angular kp_yaw kp_dist yaw_deadband dist_deadband lost_timeout place_height turn_first_rad`) |
-
-กติกาเดียวกับ `color_detect`: YAML เป็นค่าตั้งต้น JSON ทับทีละ key ลบ JSON แล้วกลับเป็น YAML ล้วน **พฤติกรรมเริ่มแบบปิดเสมอ** — checkbox `Enable behaviors` ไม่ถูกเซฟลง JSON (มีแต่ `behaviors_enabled: false` ใน YAML) ทุก launch จึงเริ่มปิดเสมอ ไม่มีไฟล์ที่ลืมไว้ทำให้หุ่นเดินเองตอนรัน demo อื่น
-
-พฤติกรรม:
-
-- **`approach`** — ถ้าป้ายอยู่นอกมุม `turn_first_rad` (0.35 rad ≈ 20°) จากแนวหน้าหุ่น หรืออยู่ด้านหลังกล้อง หุ่นจะหมุนอยู่กับที่ด้วย `max_angular` ก่อน ยังไม่เดินไปพร้อมกัน (กัน P-controller ถอยหลังพาหุ่นทะลุแท่นที่อยู่ข้างหลัง) พอป้ายอยู่ในมุมแคบแล้วจึงเดินเข้าหาด้วย P-controller สองตัว (หมุนตามแนวข้าง, เดินตามระยะ, clamp ที่ `max_linear`/`max_angular`) จน**ระยะจาก `base_footprint` ถึงป้ายเท่า `standoff`** แล้วหยุดนิ่ง — วัดจากตัวหุ่นตามแนวหัน ไม่ใช่จากกล้อง จึงไม่ขึ้นกับท่าแขน ในซิม `approach` ที่ standoff 0.4 หยุดจริงที่ฐานหุ่นห่างป้าย ~0.42 ม.
-- **`place`** — เหมือน `approach` แต่พอถึงจะเรียก `/pick_and_place/place` หนึ่งครั้ง โดยคำนวณจุดบนแท่นของสถานีจากท่าป้าย (`tags.tag_to_pedestal_top()` บวก `place_height`) **ต้อง `~/pick` ก่อน** ให้หุ่นอยู่ในสถานะ `CARRY` ถ้า service ตอบ `not reachable` แปลว่า `standoff` ยาวไป ลดลงทีละ 0.05 แล้วปิด-เปิด checkbox ใหม่ (การปิด-เปิดรีเซ็ตสถานะให้เริ่มใหม่) — จะไม่ retry ให้เอง คำตอบล่าสุดของ service โชว์ในบรรทัด status
-- **`stop`** — ส่ง twist ศูนย์ตลอดที่เห็นป้ายนี้ ชนะทุก action อื่น (ใช้เป็นป้ายห้ามเข้า)
-- เห็นหลายป้าย → เลือกป้ายที่ใกล้สุดที่ action ไม่ใช่ `none`
-- ป้ายหายไป → ยืนนิ่ง `lost_timeout` วินาที (กันป้ายกะพริบหลุดเฟรมเดียว) แล้วส่ง twist ศูนย์อีกหนึ่งครั้งจากนั้น**เลิกยุ่งกับ `/controller/cmd_vel`** ให้ teleop/Nav2 ใช้ต่อได้
-
-ตรรกะทั้งหมดอยู่ใน `rospider_gazebo/tag_behavior.py` (ไม่มี ROS) มีเทสต์ `test/test_tag_behavior.py` คุมทิศทางการหมุน, deadband, การเลี้ยวก่อนเดินเมื่อมุมเกิน `turn_first_rad`, การยิง `place` ครั้งเดียว และลำดับการปล่อย `cmd_vel`
-
-### ป้ายจำได้ (tag memory) — ทำไม `place` ยังทำงานตอน CARRY
-
-กล้องติดอยู่ที่ข้อมือ (`link4`) พอ `~/pick` สำเร็จเข้าสถานะ `CARRY` ลูกบาศก์ที่คีบอยู่จะบังกล้องจนป้ายไม่เข้าเฟรมเลย ไม่ว่า standoff จะเป็นเท่าไหร่ — `place` จึงพึ่งการเห็นสดไม่ได้
-
-โหนดจำท่าทางของทุกป้ายที่เคยเห็นไว้ในเฟรม `memory_frame` (พารามิเตอร์ ตั้งต้น `odom`, ใส่ `''` เพื่อปิดการจำ) พอเปิด behaviours แล้ว ป้ายที่ตั้ง action เป็น `approach`/`place` ที่ไม่อยู่ในเฟรมปัจจุบันแต่มีอยู่ในความจำ โหนดจะสร้าง "การเห็นเสมือน" จากท่าที่จำไว้ผ่าน TF แล้วส่งให้ `TagBehavior` เหมือนเห็นจริง (บรรทัด status จะมีคำว่า `[remembered]` ต่อท้าย) ป้าย `stop` ไม่ถูกจำ — ป้ายห้ามเข้าที่จำไว้แต่หุ่นมองไม่เห็นจริงจะทำให้หุ่นหยุดแช่ตลอดไป
-
-ผลที่ตามมา: เมื่อเปิดการจำ ป้ายที่วางสำเร็จแล้วจะไม่มีวัน "หลุดจากสายตา" ในทางความจำ ดังนั้น `place` จะยิงแค่ครั้งเดียวต่อการเปิดสวิตช์หนึ่งครั้ง — ต้องปิดแล้วเปิด checkbox `Enable behaviors` ใหม่เพื่อให้ยิงได้อีกครั้ง
-
-> **ป้ายไม่มีวันหายจริง ๆ เท่ากับ `/controller/cmd_vel` ก็ไม่มีวันถูกปล่อยเหมือนกัน** ข้อความก่อนหน้านี้ในหัวข้อพฤติกรรมที่ว่าป้ายหายไปแล้วหุ่นจะยืนนิ่ง `lost_timeout` วินาทีแล้วปล่อย `cmd_vel` คืนให้ teleop/Nav2 นั้น จริงแค่ตอน `memory_frame: ''` (ปิดการจำ) หรือป้ายนั้นไม่เคยถูกเห็นมาก่อนเลยเท่านั้น เรื่องนี้ใช้กับ `approach` เหมือนกัน ไม่ใช่แค่ `place` — พอเปิดการจำแบบ default (`odom`) แล้วป้ายเคยถูกเห็นสักครั้ง ป้ายที่ตั้ง action เป็น `approach`/`place` จะถูกเรียกคืนเป็นการเห็นเสมือนทุกเฟรมตลอดไป พฤติกรรมจึงไม่มีวัน "lost" และโหนดจะยัง publish `/controller/cmd_vel` ที่ความถี่กล้องเรื่อย ๆ (เดินเข้าหา, ยืนนิ่งที่ standoff, หรือยืนนิ่งหลัง `place`) จนกว่าจะปิด checkbox `Enable behaviors`
-
-> ทำไมต้องวัดจาก `base_footprint`: กล้องบนข้อมือหันลงและหันข้างระหว่าง `CARRY` แกน x/z ของกล้องตอนนั้นไม่บอกอะไรเกี่ยวกับทิศหุ่นเลย ถ้าคุมด้วยพิกัดกล้องตรง ๆ หุ่นจะ "ถึง standoff" ที่ตำแหน่งไม่มีความหมาย โหนดจึงแปลงทุกท่าป้าย (จริงหรือจำ) ผ่าน TF `base_footprint <- <camera frame>` ก่อนเสมอ ถ้า TF หาไม่เจอ พฤติกรรมยังทำงานต่อด้วยเฟรมว่าง (ไม่มีป้ายให้เห็นเลย) เพื่อให้ลำดับ "ยืนนิ่ง แล้วปล่อย `cmd_vel`" ของป้ายที่หายยังทำงานอยู่ ไม่ใช่ปล่อยให้ twist ล่าสุดค้างอยู่เฉย ๆ — ไม่คุมด้วยพิกัดกล้องดิบเด็ดขาด
-
-### `place` ทำได้แค่ไหนจริง ๆ — พูดตรง ๆ
-
-`place` เดินเข้าหาด้วยความจำแล้วเรียก `/pick_and_place/place` — ใช้ได้ดีเมื่อหุ่นอยู่ใกล้สถานีอยู่แล้ว (แค่เดินตรงระยะสั้น ๆ) **ไม่ได้ออกแบบมาให้เดินอ้อมสิ่งกีดขวางเป็นระยะไกลด้วยความจำ** — ทดสอบในฉาก pick_place เต็มพบว่าหุ่นชนแท่นหกล้มระหว่างทาง แผน launch แบบรวม Nav2 ในอนาคตจะให้ Nav2 พาหุ่นไปถึงสถานี แล้วให้ `place` ทำแค่ก้าวสุดท้าย
-
-### สั่งค่าสดด้วย `ros2 param set`
-
-ใช้ได้กับ `behaviors_enabled`, `behaviors.tagN.action`, `behaviors.tagN.standoff`, `control.*`, `detector.*`, `max_reproj_error_px` เช่น
-
-```bash
-ros2 param set /apriltag_detect behaviors_enabled true
-```
-
-GUI ไม่อ่านค่ากลับมาแสดงให้ ถ้าไปแตะ widget ใดหลังจากนั้น widget จะเขียนทับด้วยค่าที่มันถืออยู่ ไม่ใช่ค่าที่เพิ่ง set
-
-> **จุดพลาดที่รู้อยู่แล้ว (1):** slider `min perimeter rate` มีช่วงตามที่ออกแบบ 0-0.2 แต่ป้ายขนาด 0.9 ม. (ระยะ spawn ปกติ) จะหายจากภาพจริงต่อเมื่อค่าดันเกิน ~0.55 ซึ่งอยู่นอกช่วง slider ทั้งหมด — เลื่อนสุด slider แล้วป้ายจะยังไม่หายไปไหน
-
-> **จุดพลาดที่รู้อยู่แล้ว (2):** ที่ระยะใกล้มาก (< ~0.3 ม. จาก `base_footprint`) `thresh constant` ค่าเริ่มต้นอาจทำให้หาป้ายสดไม่เจอเลย — tag memory ช่วยคลุมช่วงนี้ได้ (โหนดยังใช้ท่าที่จำไว้ต่อ)
-
-### เพิ่มสถานีใหม่
-
-สองขั้นตอน สั่งสร้างไฟล์ แล้วบอกตำแหน่ง
-
-```bash
-cd ~/entech_hiwonder_ros2_ws/ROSpider/src/simulations/rospider_gazebo
-python3 tools/make_tag_textures.py 1 2
-```
-
-คำสั่งเดียวได้ทั้ง `worlds/textures/tag_1.png` และ `models/tag_station_1/model.sdf` แล้วแก้ `config/apriltag.yaml`:
-
-```yaml
-    stations:
-      station0: [0.9, 0.0, 3.14159]   # [x, y, yaw] ในกรอบ world
-      station1: [0.0, 1.2, -1.5708]
-```
-
-ชื่อ key บอกหมายเลขป้าย (`station1` → `tag_station_1` → `tag_1.png`) ตัวเลข yaw คือหันหน้าไปทางไหน — โมเดลหันหน้าไปทาง **+x** ตอน yaw = 0 หุ่นที่เข้ามาจากทาง +x จะเห็นป้าย
-
-พิกัดสถานีอยู่ในไฟล์ config ไฟล์เดียว **ไม่ได้เขียนลงไฟล์ world** ดังนั้นย้ายไปใช้กับโลกที่คุณออกแบบเองได้โดยแก้ที่เดียว
-
-ปิดตัวตรวจจับและไม่ต้อง spawn สถานี: `tags:=false`
-
-### ขนาดป้ายกับระยะที่อ่านได้
-
-ป้ายกว้าง 0.15 ม. กล้องซิมมี `fx = 467.7 px` ความกว้างในภาพจึงเป็น `467.7 × 0.15 / ระยะ`:
-
-| ระยะ | ความกว้างในภาพ | ใช้ได้แค่ไหน |
-|---|---|---|
-| 0.3 ม. | 234 px | อ่าน id และท่าทางได้แม่น |
-| 1.0 ม. | 70 px | ดี |
-| 2.0 ม. | 35 px | อ่าน id ได้ ท่าทางเริ่มไม่แม่น |
-
-ป้าย 36h11 กว้าง 10 ช่องรวมขอบดำ ที่ 35 px จึงเหลือช่องละ 3.5 px
-
-ถ้าจะเปลี่ยนขนาดป้าย **ต้องแก้ที่ `rospider_gazebo/tags.py`** แล้วสร้าง texture กับโมเดลใหม่ ไม่ใช่แก้ `tag_size` ใน `config/apriltag.yaml` อย่างเดียว — ขนาดบอร์ดคำนวณมาจาก `TAG_SIZE` ถ้าสองค่าไม่ตรงกัน ระยะทุกค่าที่รายงานจะผิดตามอัตราส่วนนั้นโดยไม่มีอาการอื่นให้เห็น (มีเทสต์ `test_board_face_matches_the_generated_texture` คุมไว้)
-
-### ป้ายหายไปกลางคัน — ไม่ใช่บั๊ก
-
-กล้องอยู่บนแขน พอ `pick_and_place` สั่งแขนไปท่ามอง (`look_pose`) หรือท่าหยิบ กล้องก็หันไปทางอื่น ป้ายหายจากเฟรมเป็นเรื่องปกติ
-
-โหนดจะ publish `apriltag_info` ที่มี `data` ว่างต่อไปเรื่อย ๆ **ไม่ใช่หยุด publish** เพื่อให้แยกออกว่า "มองอยู่แต่ไม่เจอ" ต่างจาก "โหนดตายแล้ว" และ TF `tag_<id>` จะไม่ถูกประกาศใหม่ ผู้ใช้ต้องเช็ค timestamp เอง ไม่ใช่เชื่อว่าค่าล่าสุดสดเสมอ
-
-## 9. YOLO (ตรวจจับวัตถุแบบเทรนเองได้)
-
-`color_detect` กับ `yolo_detect` **ปล่อยของอย่างเดียวกันเป๊ะ** — `interfaces/ObjectsInfo` บน `/yolo/object_detect` สลับกันได้โดย `pick_and_place` ไม่ต้องแก้อะไรเลยแม้แต่บรรทัดเดียว
-
-```bash
-ros2 launch rospider_gazebo pick_place.launch.py detector:=yolo
-```
-
-ทั้งสองตัว**ไม่เคยรันพร้อมกัน** เลือกได้ทีละตัว
-
-| | `detector:=color` (ค่าเริ่มต้น) | `detector:=yolo` |
-|---|---|---|
-| ต้องลงอะไรเพิ่ม | ไม่ต้อง | torch + ultralytics |
-| เพิ่มวัตถุใหม่ | ปรับช่วง HSV (หัวข้อ 7) | เก็บภาพแล้วเทรน |
-| ทนต่อแสง/เงา | ปานกลาง | ดีกว่า |
-| จำแนกได้จาก | สีอย่างเดียว | รูปร่างและลวดลาย |
-
-### ติดตั้ง (เฉพาะทาง YOLO)
-
-python3 ของเครื่องนี้เป็นแบบ externally-managed (PEP 668) และของอื่นในโปรเจกต์นี้ (opencv 5.0, ultralytics) ก็ลงไว้ที่ user site ซึ่งเป็นที่ที่ node ที่ `ros2 launch` เรียกจะมองเห็น — **venv จะมองไม่เห็น** ดังนั้น:
-
-```bash
-pip install --user --break-system-packages -r requirements-yolo.txt
-```
-
-แล้วลง torch แยกต่างหาก เพราะเลือก build ตามการ์ด:
-
-```bash
-# การ์ด Blackwell เช่น RTX 50xx ต้องใช้ cu128 ขึ้นไป wheel ธรรมดาใช้ไม่ได้
-pip install --user --break-system-packages torch torchvision     --index-url https://download.pytorch.org/whl/cu128
-```
-
-ถ้าไม่มี GPU หรือไม่อยากโหลด 3 GB ใช้ CPU ก็ได้ (inference พอไหว เทรนจะช้ามาก):
-
-```bash
-pip install --user --break-system-packages torch torchvision     --index-url https://download.pytorch.org/whl/cpu
-```
-แล้วตั้ง `device: cpu` ใน `config/yolo.yaml`
-
-> ถ้ายังไม่ได้ลง โหนดจะตายพร้อมข้อความบอกวิธีลง ไม่ใช่ traceback ของ import — ตั้งใจให้เป็นแบบนั้น
-
-> ⚠️ **ต้องลง torch ก่อน แล้วค่อยลง `requirements-yolo.txt`** ลำดับสำคัญ เพราะการลง torch จะดึง numpy 2.x เข้ามาด้วย และไฟล์ requirements ตรึง `numpy<2` ไว้ ต้องให้อันหลังชนะ
->
-> **ทำไมต้องตรึง numpy** `cv_bridge` ของ ROS Jazzy เป็น C++ extension ที่คอมไพล์กับ numpy 1.x พอ numpy 2 มาอยู่ที่ user site มันจะบัง numpy 1.26.4 ของระบบ แล้ว `import cv_bridge` พังทันที — **ทำให้ `color_detect` กับ `pick_and_place` ตายไปด้วย ไม่ใช่แค่ YOLO** วัดจริงแล้ว: numpy 2.5.3 = โหนดกล้องทุกตัวตายตั้งแต่ import, numpy 1.26.4 = cv2 5.0, cv_bridge, torch + CUDA, ultralytics ทำงานร่วมกันได้หมด
->
-> pip จะเตือนว่า `opencv-python 5.0 requires numpy>=2` **ไม่ต้องสนใจ** ข้อกำหนดนั้นไม่ได้บังคับตอนรัน และ cv2 5.0.0 ทำงานกับ 1.26.4 ได้ปกติ ซึ่งเป็นสภาพที่ workspace นี้ใช้มาตลอด
->
-> อาการเวลาเจอ: `ImportError: A module that was compiled using NumPy 1.x cannot be run in NumPy 2.x` แก้ด้วย `pip install --user --break-system-packages 'numpy<2'`
-
-### ตั้งค่า
-
-`config/yolo.yaml`:
-
-| ค่า | ความหมาย |
-|---|---|
-| `model_path` | ไฟล์โมเดล path เต็มก็ได้ หรือชื่อที่ ultralytics โหลดเองได้ (`yolo11n.pt`) |
-| `task` | `detect` = กรอบตรง, `obb` = กรอบเอียง — `pick_and_place` อ่านได้ทั้งคู่ |
-| `conf` | ความมั่นใจขั้นต่ำ |
-| `device` | `''` ให้เลือกเอง, `'cpu'` บังคับ CPU, `'0'` บังคับ GPU ตัวแรก |
-| `classes` | ว่าง = ปล่อยทุกคลาส ใส่รายชื่อเพื่อกรอง |
-
-> **ชื่อคลาสต้องอยู่ใน `colors` ของ `config/pick_place.yaml` ด้วย** ไม่งั้น `pick_and_place` จะไม่ยอมหยิบ มันเช็กชื่อที่รับเข้ามากับรายการนั้น
-
-### จูนสด ๆ ด้วยหน้าต่าง (`tune:=true`)
-
-```bash
-ros2 launch rospider_gazebo pick_place.launch.py detector:=yolo tune:=true auto_start:=false
-```
-
-เปิดหน้าต่าง `yolo_detect tune` (Tk): ซ้ายคือภาพกล้องพร้อมกรอบและคะแนน ขวามีแค่สองอย่างที่ควรแตะในเวิร์กช็อป
-
-| | ทำอะไร |
-|---|---|
-| **confidence** | ความมั่นใจขั้นต่ำ ลดลงถ้าโมเดลเห็นของแต่ไม่กล้าบอก เพิ่มขึ้นถ้ามันเห็นผี |
-| **classes to publish** | checkbox ต่อคลาสที่โมเดลรู้จัก ติ๊กออก = ไม่ส่งคลาสนั้นไป `/yolo/object_detect` เลย (`pick_and_place` จะไม่เห็น) ติ๊กครบทุกอัน = ไม่กรอง |
-
-บรรทัดสถานะบอกว่าเจอกี่ชิ้น ใช้เวลากี่ ms และกำลังปล่อยคลาสไหนอยู่ ระหว่างจูนโหนดยัง publish ตามปกติ ปิดหน้าต่างแล้วโหนดก็ยังตรวจจับต่อด้วยค่าล่าสุด
-
-ปุ่ม **Save** เซฟ `conf` กับ `classes` ลง `~/.ros/yolo_detect_tuned.json` (เปลี่ยนที่เก็บด้วยพารามิเตอร์ `tuned_path`) ซึ่งจะทับ `config/yolo.yaml` ตอนเปิดครั้งถัดไป — กติกาเดียวกับ `color_detect` และ `apriltag_detect`: YAML เป็นค่าตั้งต้น JSON ทับ ลบ JSON แล้วกลับเป็น YAML ล้วน โหนด log บอกเสมอว่าใช้ไฟล์ไหนอยู่ **Revert** กลับไปค่า YAML, **Print YAML** พิมพ์บล็อกที่วางลง `config/yolo.yaml` ได้เลย
-
-> หน้าต่างนี้**ไม่ได้**เพิ่มคลาสใหม่ให้ — โมเดลที่เทรนมารู้จักแค่คลาสที่เทรน ของใหม่ต้องเก็บภาพแล้วเทรนใหม่ (หัวข้อถัดไป)
-
-### YOLO ใช้เวลาอุ่นเครื่องตอนเริ่ม
-
-โหนดจะรัน inference กับภาพเปล่าหนึ่งครั้ง **ก่อน** สมัครรับภาพจากกล้อง แล้ว log ว่า `warmed up in 5.2s` เพราะ inference ครั้งแรกต้องคอมไพล์ CUDA kernel ใช้เวลาราว 5–10 วินาที ส่วนครั้งต่อ ๆ ไปใช้ 19 ms
-
-ถ้าไม่ทำแบบนี้ โหนดจะรับภาพแล้วเงียบไปสิบวินาที ซึ่ง `pick_and_place` จะยอมแพ้ไปแล้ว (`state_timeout` = 15 วิ) แล้วขึ้น `never saw red; skipping` — ดูเหมือนตรวจจับไม่ได้ ทั้งที่จริงแค่ยังไม่ทันพร้อม
-
-### ลูกบาศก์ตกแต่งไม่ได้อยู่ใน dataset
-
-ในโลกมีลูกบาศก์ตกแต่งสีเดียวกันสามใบที่ x=0.55 (ดูหัวข้อ "กล้องเห็นลูกบาศก์สีเดียวกันสองลูก") `capture_dataset.py` ไม่ได้ label ให้ เพราะไม่ได้อยู่ใน `OBJECTS` — โมเดลจึงเรียนว่าเป็นพื้นหลัง
-
-**ต่างจาก `color_detect` ที่ตรวจเจอทั้งคู่** ผลคือ YOLO ไม่ส่งกรอบของลูกบาศก์ตกแต่งออกมาเลย ซึ่งสำหรับการหยิบถือว่าดีกว่า (ของพวกนั้นเอื้อมไม่ถึงอยู่แล้ว) แต่ถ้าอยากให้พฤติกรรมเหมือนกันเป๊ะ ต้องเพิ่มเข้า `OBJECTS` แล้วเก็บ dataset ใหม่
-
-### เก็บข้อมูลเทรนเอง (ไม่ต้องลากกรอบเอง)
-
-เปิดซิมไว้ก่อน แล้วรันเครื่องมือเก็บข้อมูลอีกหน้าต่าง:
-
-```bash
-ros2 launch rospider_gazebo pick_place.launch.py auto_start:=false tags:=false
-```
-```bash
-cd ~/entech_hiwonder_ros2_ws/ROSpider/src/simulations/rospider_gazebo
-python3 tools/capture_dataset.py --samples 500 --out ~/datasets/cubes
-```
-
-เครื่องมือจะสุ่มย้ายลูกบาศก์ รอให้หยุดนิ่ง **อ่านตำแหน่งจริงกลับมา** แล้วคำนวณกรอบจากเรขาคณิต — ฉายมุมกล่องทั้ง 8 จุดผ่าน `camera_info` และ TF จริง ได้ label ถูกต้อง 100% โดยไม่ต้องลากกรอบเอง
-
-> **ทำไมต้องอ่านตำแหน่งกลับ** ตอนแรกผมเขียนให้เชื่อตำแหน่งที่สั่งไป เพราะ "เราวางเอง เราก็รู้" — **ผิด** ลูกบาศก์เป็นวัตถุที่มีฟิสิกส์ สั่งไป `(0.28, 0.11, 0.105)` วัดได้จริงว่าไปจบที่ `(0.299, 0.110, 0.025)` คือไถล 2 ซม. แล้วตกจากแท่นลงพื้น ตอนวาด label กลับลงภาพเห็นชัดว่ากรอบเลื่อนจากลูกบาศก์ทุกใบ
-
-**ตรวจ label ด้วยตาทุกครั้งก่อนเทรน** — dataset ที่ผิดจะเทรนสำเร็จเงียบ ๆ แล้วได้โมเดลที่มั่นใจแต่ผิด:
-
-```bash
-python3 - <<'EOF'
-import glob, cv2
-D = '/home/YOURNAME/datasets/cubes'
-for path in sorted(glob.glob(f'{D}/images/*/*.jpg'))[:5]:
-    img = cv2.imread(path); h, w = img.shape[:2]
-    lab = path.replace('/images/', '/labels/').replace('.jpg', '.txt')
-    for line in open(lab):
-        c, x, y, bw, bh = line.split()
-        x, y, bw, bh = float(x)*w, float(y)*h, float(bw)*w, float(bh)*h
-        cv2.rectangle(img, (int(x-bw/2), int(y-bh/2)),
-                      (int(x+bw/2), int(y+bh/2)), (0,255,0), 2)
-    out = '/tmp/check_' + path.split('/')[-1]
-    cv2.imwrite(out, img); print(out)
-EOF
-```
-
-กรอบต้องทาบบนวัตถุพอดี ถ้าเลื่อนเท่ากันทุกภาพแปลว่า TF หรือการฉายภาพผิด ถ้ามีกรอบบนของที่ถูกบังอยู่แปลว่า occlusion check ไม่ทำงาน
-
-### เทรน
-
-```bash
-python3 tools/train_yolo.py --data ~/datasets/cubes --name cubes
-```
-
-ได้ `models/yolo/cubes.pt` แล้วชี้ `model_path` ใน `config/yolo.yaml` มาที่ไฟล์นี้
-
-ฉากในซิมเรียบและไม่รก ค่า mAP50 ควรได้เกิน 0.9 **ถ้าต่ำกว่านั้นแปลว่า label ผิด ไม่ใช่ epochs น้อย** กลับไปตรวจภาพก่อน
-
-### เพิ่มวัตถุใหม่
-
-1. แก้ `OBJECTS` ใน `tools/capture_dataset.py` — ใส่ชื่อโมเดลใน Gazebo, ชื่อคลาส และขนาดกล่อง
-2. เก็บข้อมูลใหม่ แล้วเทรนใหม่
-3. เพิ่มชื่อคลาสลงใน `colors` ของ `config/pick_place.yaml` ถ้าอยากให้หยิบได้
-
-> ถ้าอยากให้**หยิบ**ของใหม่ได้ด้วย ยังต้องเพิ่ม `DetachableJoint` ใน `urdf/rospider_gazebo.urdf.xacro` ไฟล์โมเดล SDF และ entry ใน `config/gz_bridge.yaml` อีก — ปลั๊กอินนั้นผูก `child_model` ตายตั้งแต่ตอนโหลด หนึ่งปลั๊กอินต่อหนึ่งวัตถุ (ยังไม่ได้ทำให้ง่ายกว่านี้ในรอบนี้)
-
-### ใช้ dataset ที่ label เอง
-
-`train_yolo.py` รับ path เดียวกัน ไม่ว่า dataset จะมาจากเครื่องมือข้างบนหรือจาก Roboflow / labelImg — ทั้งคู่ export เป็นโครงสร้าง YOLO เหมือนกัน ขอแค่มี `data.yaml` ที่บอกชื่อคลาสและโฟลเดอร์ train/val
-
-## รันหลายตัวพร้อมกัน
-
-ตั้งค่าคนละชุดในแต่ละ terminal ไม่ให้ชนกัน:
-
-```bash
-export ROS_DOMAIN_ID=11 GZ_PARTITION=sim11
-```
+แก้ค่าใน `src/simulations/rospider_gazebo/config/shape_challenge.yaml` แล้วปิด-เปิด launch ใหม่ก่อนตรวจทุกครั้ง (หุ่นไม่ต้องเดิน) — ด่าน: 1 แยกวัตถุออกจากพื้น · 2 เห็นครบและเรียกชื่อถูก · 3 เลือกลูกบอล
 
 ## ปัญหาที่พบบ่อย
 
-- **Gazebo ปิดเองทันที / log มี `OpenGL 3.3 is not supported` หรือ `eglInitialize failed`** — ไดรเวอร์ GPU มีปัญหา (เช่น NVIDIA kernel module กับ library คนละเวอร์ชันหลังอัปเดต ให้ reboot) โหมด `gui:=false` ใช้ EGL headless ซึ่งต้องการไดรเวอร์ GPU ที่ใช้งานได้
-- **หุ่นเคลื่อนช้ามาก** — ดู real time factor มุมขวาล่างของ Gazebo ถ้าต่ำกว่า ~0.5 เครื่องทำงานไม่ทัน (ปกติควรใกล้ 1.0)
-- **RViz ขึ้น `Message Filter dropping message ... earlier than all the data in the transform cache` หนึ่งครั้งตอนเริ่ม และ `GLSL link result` / `active samplers ...`** — ไม่มีผล ข้อความแรกเกิดเพราะ scan แรกมาถึงก่อน TF (หุ่นจริงก็เป็น) ข้อความ GLSL เป็นคำเตือนของไดรเวอร์กราฟิก
-- **`slam.launch.py` / `navigation.launch.py` ของ package `slam` / `navigation` (Hiwonder) ใช้กับ sim ไม่ได้** แม้มี `sim:=true` เพราะยังเปิด driver ของหุ่นจริง และเขียนไว้สำหรับ ROS 2 Humble — ใช้ของ `rospider_gazebo` แทน
-- **node ที่ต้องใช้ `controller` / `kinematics` ของ Hiwonder** (เช่น self balancing, body control, perform actions) รันบน PC ไม่ได้ เพราะต้องใช้ `kinematics.so` ของ ARM
-- ขาและแขนใน sim ไม่มี collision (ตัดออกเพื่อให้ physics เร็ว) — ขาทะลุสิ่งกีดขวางได้ ตัวหุ่นชนกำแพงผ่านกล่อง collision ใต้ลำตัว
-
+- **launch ขึ้น `KeyError: 'need_compile'`**: ลืม `export need_compile=True`
+- **Gazebo ปิดเองทันที หรือขึ้น `eglInitialize failed`**: ไดรเวอร์ GPU มีปัญหา ลอง reboot
+- **หุ่นเคลื่อนช้ามาก**: ดู real time factor มุมขวาล่างของ Gazebo ถ้าต่ำกว่า ~0.5 แปลว่าเครื่องทำงานไม่ทัน
+- **node หากันไม่เจอหลังรันหลายรอบ**: ปิดทุกอย่าง แล้วรัน `rm -f /dev/shm/fastrtps_*`
+- **รันหลายคนในเครือข่ายเดียวกัน**: ให้แต่ละเครื่องตั้ง `export ROS_DOMAIN_ID=<เลขไม่ซ้ำกัน>`

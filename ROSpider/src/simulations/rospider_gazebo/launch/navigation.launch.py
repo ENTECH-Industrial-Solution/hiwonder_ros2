@@ -7,12 +7,17 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from rospider_gazebo.maps import resolve_map
+from rospider_gazebo.maps import find_map, workspace_maps_dir
 
 
 def launch_setup(context):
     pkg = get_package_share_directory('rospider_gazebo')
-    map_yaml = resolve_map(LaunchConfiguration('map').perform(context), '.yaml')
+    value = LaunchConfiguration('map').perform(context)
+    # A 2D map saved with map_saver_cli lands wherever the shell was, so look there too.
+    map_yaml = find_map(value, '.yaml', workspace_maps_dir(), os.getcwd())
+    if map_yaml is None:
+        raise RuntimeError(f"map not found: '{value}' (looked in {workspace_maps_dir()}, "
+                           f'{os.getcwd()}/maps and {os.getcwd()})')
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'gazebo.launch.py')),
@@ -51,9 +56,11 @@ def launch_setup(context):
 def generate_launch_description():
     pkg = get_package_share_directory('rospider_gazebo')
     return LaunchDescription([
-        DeclareLaunchArgument('world', default_value=os.path.join(pkg, 'worlds', 'rospider_room.sdf')),
+        DeclareLaunchArgument('world', default_value='rospider_room',
+                              description='a world in worlds/ by name (slam_challenge), or a path'),
         DeclareLaunchArgument('map', default_value=os.path.join(pkg, 'maps', 'rospider_room.yaml'),
-                              description='2D map: a name in <workspace>/maps (<name>.yaml) or a path to a map .yaml'),
+                              description='2D map: a name in <workspace>/maps or ./maps (<name>.yaml), '
+                                          'or a path to a map .yaml'),
         DeclareLaunchArgument('params_file', default_value=os.path.join(pkg, 'config', 'nav2_params.yaml')),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('rviz', default_value='true'),

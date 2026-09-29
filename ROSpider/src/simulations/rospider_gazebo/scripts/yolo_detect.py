@@ -85,7 +85,7 @@ def _resolve_model(model_path):
         raise FileNotFoundError(
             f'{candidate} does not exist. The repository does not ship a '
             'trained model yet: capture a dataset and train one with\n'
-            '  python3 tools/capture_dataset.py --samples 500 --out '
+            '  python3 tools/capture_dataset.py --samples 50 --out '
             '~/datasets/cubes\n'
             '  python3 tools/train_yolo.py --data ~/datasets/cubes '
             '--name cubes\n'

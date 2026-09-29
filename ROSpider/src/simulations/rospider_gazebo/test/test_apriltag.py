@@ -122,20 +122,10 @@ def test_quaternion_from_rvec_matches_the_rotation_matrix():
         np.testing.assert_allclose(from_quat, matrix, atol=1e-9)
 
 
-import importlib.util  # noqa: E402  (grouped with the tool-loading helpers)
-import pathlib  # noqa: E402
+import pathlib  # noqa: E402  (grouped with the SDF helpers)
 import xml.etree.ElementTree as ET  # noqa: E402
 
 _PKG_ROOT = pathlib.Path(__file__).resolve().parent.parent
-
-
-def _load_tool():
-    """tools/ is not an installed package; load the script by path."""
-    spec = importlib.util.spec_from_file_location(
-        'make_tag_textures', _PKG_ROOT / 'tools' / 'make_tag_textures.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _boxes(sdf_text):
@@ -158,16 +148,36 @@ def test_committed_station_sdf_matches_geometry():
     # the rendered tag is the wrong size -- a failure with no visible symptom
     # except systematically wrong poses.
     committed = (_PKG_ROOT / 'models' / 'tag_station_0' / 'model.sdf').read_text()
-    assert committed == _load_tool().station_sdf(0)
+    assert committed == tags.station_sdf(0)
 
 
 def test_station_boxes_match_tags_module():
-    boxes = _boxes(_load_tool().station_sdf(0))
+    boxes = _boxes(tags.station_sdf(0))
     assert boxes['pedestal_v'] == tuple(round(v, 6) for v in tags.PEDESTAL_SIZE)
     assert boxes['board_v'] == (round(tags.BOARD_THICKNESS, 6),
                                 round(tags.BOARD_FACE, 6),
                                 round(tags.BOARD_FACE, 6))
     assert boxes['post_v'] == tuple(round(v, 6) for v in tags.POST_SIZE)
+
+
+def test_station_marker_is_optional_and_readable():
+    # The optional colour panel must not change the committed stations
+    # (marker None), and with a colour it adds one visual above the board
+    # on a post tall enough to hold it.
+    plain = tags.station_sdf(3)
+    marked = tags.station_sdf(3, marker_rgba=(0.98, 0.72, 0.80, 1.0))
+    assert 'marker_v' not in plain
+    boxes = _boxes(marked)
+    assert boxes['marker_v'] == (round(tags.BOARD_THICKNESS, 6),
+                                 round(tags.MARKER_SIZE, 6),
+                                 round(tags.MARKER_SIZE, 6))
+    assert boxes['post_v'][2] == round(tags.MARKER_CENTRE_HEIGHT, 6)
+    assert tags.MARKER_CENTRE_HEIGHT - tags.MARKER_SIZE / 2 > \
+        tags.TAG_CENTRE_HEIGHT + tags.BOARD_FACE / 2      # clear of the tag
+    assert '0.980 0.720 0.800 1.000' in marked
+    big = _boxes(tags.station_sdf(3, tag_size=0.30))
+    assert big['board_v'][1] == round(tags.board_face(0.30), 6)
+    assert big['post_v'][2] == round(tags.TAG_CENTRE_HEIGHT - tags.board_face(0.30) / 2, 6)
 
 
 def test_committed_texture_is_detectable():

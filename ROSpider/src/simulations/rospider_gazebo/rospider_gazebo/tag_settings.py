@@ -11,7 +11,11 @@ Settings dict shape (also the JSON shape):
     {'detector': {<tags.DETECTOR_DEFAULTS keys>},
      'max_reproj_error_px': float,
      'control': {<CONTROL_DEFAULTS keys>},
-     'behaviors': {'tag<id>': {'action': str, 'standoff': float}}}
+     'behaviors': {'tag<id>': {'action': str, 'standoff': float, 'cube': str}}}
+
+A behaviour's `cube` names what belongs on that tag's station ('' for
+nothing in particular). The node itself never reads it; it is published
+with the rest of the rows on apriltag_detect's latched ~/behaviors.
 
 `behaviors_enabled` is deliberately not a setting: it is never saved, so a
 robot never starts walking on its own because of a file left behind.
@@ -27,6 +31,7 @@ ACTIONS = ('none', 'approach', 'place', 'stop')
 # Per-tag defaults. standoff is the camera-to-tag range (tvec z) in metres at
 # which approach/place stop.
 DEFAULT_STANDOFF = 0.4
+DEFAULT_CUBE = ''
 
 CONTROL_DEFAULTS = {
     'max_linear': 0.05,      # m/s -- the same ceiling nav2_params.yaml uses
@@ -71,14 +76,21 @@ def tag_id(key):
     return int(match.group(1))
 
 
+def default_behavior():
+    return {'action': 'none', 'standoff': DEFAULT_STANDOFF,
+            'cube': DEFAULT_CUBE}
+
+
 def _behavior(value, base=None):
-    """A complete {'action', 'standoff'} from a possibly partial dict."""
-    base = base or {'action': 'none', 'standoff': DEFAULT_STANDOFF}
+    """A complete {'action', 'standoff', 'cube'} from a possibly partial
+    dict."""
+    base = base or default_behavior()
     action = str(value.get('action', base['action']))
     if action not in ACTIONS:
         raise ValueError(f'action must be one of {ACTIONS}, not {action!r}')
     return {'action': action,
-            'standoff': float(value.get('standoff', base['standoff']))}
+            'standoff': float(value.get('standoff', base['standoff'])),
+            'cube': str(value.get('cube', base['cube']))}
 
 
 def _set_section(settings, section, key, value):
@@ -156,5 +168,6 @@ def yaml_block(settings):
     for key in sorted(settings['behaviors'], key=tag_id):
         row = settings['behaviors'][key]
         lines.append(f'      {key}: {{action: {row["action"]}, '
-                     f'standoff: {float(row["standoff"])}}}')
+                     f'standoff: {float(row["standoff"])}, '
+                     f'cube: {row["cube"] or "\'\'"}}}')
     return '\n'.join(lines)

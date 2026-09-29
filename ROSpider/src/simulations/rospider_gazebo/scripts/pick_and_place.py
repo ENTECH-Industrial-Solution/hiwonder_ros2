@@ -16,9 +16,11 @@ from cv_bridge import CvBridge
 from interfaces.msg import ObjectsInfo
 from interfaces.srv import SetString
 from rclpy.node import Node
-from rospider_gazebo import arm_ik
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from rospider_gazebo import arm_ik, depth_probe
+from rospider_gazebo.detections import box_centroid
 from sensor_msgs.msg import CameraInfo, Image, JointState
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, String
 from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -43,17 +45,11 @@ def _box_centroid_and_area(box):
     two corners instead of the true centre. The spec's swappability promise
     -- a real YOLO node can replace color_detect.py without touching this
     file -- is only true if both conventions are handled here.
+
+    The arithmetic lives in rospider_gazebo/detections.py, shared with the
+    ported demo windows that read the same topic, and tested there.
     """
-    if len(box) == 4:
-        x1, y1, x2, y2 = box
-        return (x1 + x2) / 2.0, (y1 + y2) / 2.0, abs(x2 - x1) * abs(y2 - y1)
-    if len(box) == 8:
-        xs = box[0::2]
-        ys = box[1::2]
-        u = sum(xs) / 4.0
-        v = sum(ys) / 4.0
-        return u, v, (max(xs) - min(xs)) * (max(ys) - min(ys))
-    return None
+    return box_centroid(box)
 
 
 class State(Enum):
@@ -156,6 +152,15 @@ class PickAndPlaceNode(Node):
         self.create_subscription(
             JointState, '/joint_states', self.joint_callback, 10)
 
+        # For a node that sequences ~/pick and ~/place and needs to know
+        # when each finished (track_and_grab). Latched, so a late
+        # subscriber sees the current state at once.
+        latched = QoSProfile(depth=1,
+                             durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.state_pub = self.create_publisher(String, '~/state', latched)
+        self.result_pub = self.create_publisher(String, '~/result', latched)
+        self.state_pub.publish(String(data=self.state.value))
+
         self.create_service(SetString, '~/start', self.start_callback)
         self.create_service(SetString, '~/pick', self.pick_callback)
         self.create_service(SetString, '~/place', self.place_callback)
@@ -236,7 +241,7 @@ class PickAndPlaceNode(Node):
         self.depth_image = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
 
     def info_callback(self, msg):
-        self.intrinsics = (msg.k[0], msg.k[4], msg.k[2], msg.k[5])
+        self.intrinsics = list(msg.k)      # the 3x3 K, as depth_probe reads it
 
     def joint_callback(self, msg):
         self.joint_state.update(zip(msg.name, msg.position))
@@ -374,6 +379,7 @@ class PickAndPlaceNode(Node):
     def enter(self, state):
         self.get_logger().info(f'{self.state.value} -> {state.value}')
         self.state = state
+        self.state_pub.publish(String(data=state.value))
         self.state_entered = self.get_clock().now()
         self._carry_announced = False
         self.streak = 0
@@ -423,6 +429,8 @@ class PickAndPlaceNode(Node):
 
     def abandon(self, reason):
         self.get_logger().warn(f'{self.target_color}: {reason}; skipping')
+        self.result_pub.publish(
+            String(data=f'abandoned {self.target_color}: {reason}'))
         self.release_all()
         self.send_gripper(self.gripper_open)
         if self.target_color in self.remaining:
@@ -436,31 +444,19 @@ class PickAndPlaceNode(Node):
         """Pixel centroid + depth -> a point in base_link, or None."""
         if self.depth_image is None or self.intrinsics is None:
             return None
-        u = int(u)
-        v = int(v)
-        half = self.depth_window // 2
-        patch = self.depth_image[max(0, v - half):v + half + 1,
-                                 max(0, u - half):u + half + 1]
-        patch = patch[np.isfinite(patch) & (patch > 0.0)]
-        if patch.size == 0:
+        depth = depth_probe.patch_depth(self.depth_image, u, v, self.depth_window)
+        if depth is None:
             return None
-        depth = float(np.median(patch))
-
-        fx, fy, cx, cy = self.intrinsics
-        camera_point = np.array([(u - cx) * depth / fx,
-                                 (v - cy) * depth / fy,
-                                 depth])
+        camera_point = depth_probe.camera_point(u, v, depth, self.intrinsics)
         try:
             tf = self.tf_buffer.lookup_transform(
                 'base_link', 'depth_cam_frame', rclpy.time.Time())
         except tf2_ros.TransformException as exc:
             self.get_logger().warn(f'no transform: {exc}')
             return None
-
-        t = tf.transform.translation
-        r = tf.transform.rotation
-        rotation = _quaternion_matrix(r.x, r.y, r.z, r.w)
-        return rotation @ camera_point + np.array([t.x, t.y, t.z])
+        t, r = tf.transform.translation, tf.transform.rotation
+        return depth_probe.transform_point(
+            camera_point, (t.x, t.y, t.z), (r.x, r.y, r.z, r.w))
 
     def plan_for(self, point):
         return arm_ik.plan_grasp(
@@ -679,18 +675,11 @@ class PickAndPlaceNode(Node):
     def _on_retreat(self):
         if self.arrived():
             self.get_logger().info(f'{self.target_color} placed')
+            self.result_pub.publish(String(data=f'placed {self.target_color}'))
             if self.target_color in self.remaining:
                 self.remaining.remove(self.target_color)
             self.target_color = None
             self.enter(State.IDLE if self.manual else State.LOOK)
-
-
-def _quaternion_matrix(x, y, z, w):
-    return np.array([
-        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
-    ])
 
 
 def main():

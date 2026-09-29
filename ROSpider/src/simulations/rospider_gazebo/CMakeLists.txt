@@ -8,7 +8,17 @@ install(DIRECTORY config launch maps models rviz urdf worlds
   DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_place.py
-                 scripts/apriltag_detect.py scripts/yolo_detect.py
+                 scripts/apriltag_detect.py scripts/yolo_detect.py scripts/check_slam.py scripts/check_nav.py
+                 scripts/check_vslam.py scripts/check_color.py scripts/check_line.py scripts/check_tag.py
+                 scripts/check_shape.py scripts/check_track.py
+                 scripts/check_grasp.py
+                 scripts/lifecycle_activate.py
+  DESTINATION lib/${PROJECT_NAME})
+
+# The Hiwonder demo windows ported from example/ -- see launch/vision_demo.launch.py.
+install(PROGRAMS scripts/apriltag_track.py scripts/object_classification.py
+                 scripts/track_and_grab.py scripts/object_tracking.py
+                 scripts/line_following.py
   DESTINATION lib/${PROJECT_NAME})
 
 # rospider_gazebo.maps: map name -> <workspace>/maps path, used by the launch files
@@ -29,6 +39,56 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_tag_behavior test/test_tag_behavior.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_yolo_settings test/test_yolo_settings.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_lab_settings test/test_lab_settings.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_servo_map test/test_servo_map.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_pid test/test_pid.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_depth_probe test/test_depth_probe.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_shape_detect test/test_shape_detect.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_detections test/test_detections.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_color_picker test/test_color_picker.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_approach test/test_approach.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_line_follower test/test_line_follower.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_slam_check test/test_slam_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_challenge_params test/test_challenge_params.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_lifecycle test/test_lifecycle.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_maps test/test_maps.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_nav_params test/test_nav_params.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_nav_check test/test_nav_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_slam_challenge_world test/test_slam_challenge_world.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_vslam_params test/test_vslam_params.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_vslam_check test/test_vslam_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_check_vslam test/test_check_vslam.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_color_check test/test_color_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_line_check test/test_line_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_tag_check test/test_tag_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_shape_check test/test_shape_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_track_check test/test_track_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_grasp_check test/test_grasp_check.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
