@@ -87,7 +87,7 @@ def evaluate(summary):
             Level(3, 'pass' if on_pad else 'fail', summary)]
 
 
-def _side(robot, point):
+def side(robot, point):
     """Where `point` lies from the robot, in Thai: in front / behind, left / right."""
     x, y, yaw = robot
     dx, dy = point[0] - x, point[1] - y
@@ -138,8 +138,8 @@ def format_report(levels):
             else:
                 gap = math.dist(block[:2], PAD)
                 lines.append(f'{head} ไม่ผ่าน - บล็อกอยู่ห่างกลางแผ่น {gap:.2f} ม. '
-                             f'(ต้องไม่เกิน {PAD_TOL:.2f}) แผ่นอยู่{_side(n["robot"], PAD)}ของหุ่น '
-                             f'แต่บล็อกไปอยู่{_side(n["robot"], block)}')
+                             f'(ต้องไม่เกิน {PAD_TOL:.2f}) แผ่นอยู่{side(n["robot"], PAD)}ของหุ่น '
+                             f'แต่บล็อกไปอยู่{side(n["robot"], block)}')
                 lines.append('  คำใบ้: จุดวางนับจากตัวหุ่น - แกนไหนชี้ไปข้างหน้า แกนไหนชี้ไปทางซ้าย')
     if all(level.status == 'pass' for level in levels):
         lines.append('ผ่านครบทุกด่าน!')

@@ -11,7 +11,7 @@ install(PROGRAMS scripts/sim_gait.py scripts/color_detect.py scripts/pick_and_pl
                  scripts/apriltag_detect.py scripts/yolo_detect.py scripts/check_slam.py scripts/check_nav.py
                  scripts/check_vslam.py scripts/check_color.py scripts/check_line.py scripts/check_tag.py
                  scripts/check_shape.py scripts/check_track.py
-                 scripts/check_grasp.py
+                 scripts/check_grasp.py scripts/check_mission.py
                  scripts/lifecycle_activate.py
   DESTINATION lib/${PROJECT_NAME})
 
@@ -89,6 +89,12 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_track_check test/test_track_check.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
   ament_add_pytest_test(test_grasp_check test/test_grasp_check.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_mission_world test/test_mission_world.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_mission_plan test/test_mission_plan.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
+  ament_add_pytest_test(test_mission_check test/test_mission_check.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
