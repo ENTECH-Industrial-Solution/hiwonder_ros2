@@ -1,16 +1,25 @@
 # โจทย์ V-SLAM (สร้างแผนที่ด้วยกล้อง)
+# V-SLAM exercise (mapping with the camera)
 # แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# Edit the values in this file, then close the launch (Ctrl+C) and start it again with the same command
 # ค่าที่ไม่ได้อยู่ในไฟล์นี้ใช้ของ config/vslam.yaml
+# Values not in this file come from config/vslam.yaml
 # อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้ แล้ว launch ใหม่
+# To start the exercise over: git checkout -- this file, then relaunch
 /**:
   ros__parameters:
     # กล้องมองไปทางไหน: floor (ก้มมองพื้น) หรือ ahead (มองตรงไปข้างหน้า)
+    # Where the camera looks: floor (down at the floor) or ahead (straight ahead)
     camera_view: floor
     # ระยะไกลสุดจากกล้อง depth ที่เอามาวาดแผนที่ (เมตร)
+    # Farthest depth-camera range used to draw the map (m)
     Grid/RangeMax: "0.5"
     # ต้องมีจุดเด่นในภาพตรงกันกี่จุด ถึงยอมรับว่ากลับมาที่เดิม (loop closure)
+    # Matching image features needed to accept a return to a known place (loop closure)
     Vis/MinInliers: "5"
     # ขนาดช่องหนึ่งช่องในแผนที่ (เมตร)
+    # Size of one map cell (m)
     Grid/CellSize: "0.05"
     # RTAB-Map ประมวลผลภาพกี่ครั้งต่อวินาที
+    # How many times per second RTAB-Map processes an image
     Rtabmap/DetectionRate: "1"

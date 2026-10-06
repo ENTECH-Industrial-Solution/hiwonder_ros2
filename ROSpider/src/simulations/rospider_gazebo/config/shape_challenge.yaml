@@ -1,14 +1,23 @@
 # โจทย์ 3D Shape Recognition: ให้หุ่นหา "ลูกบอล" (ทรงกลม) บนพื้นให้เจอด้วยกล้องความลึก
+# 3D Shape Recognition exercise: make the robot find the "ball" (sphere) on the floor with the depth camera
 # หุ่นต้องแยกวัตถุออกจากพื้น เห็นวัตถุครบทั้ง 3 ชิ้นพร้อมเรียกชื่อรูปทรงถูก แล้วเลือกลูกบอล
+# The robot must separate the objects from the floor, see all 3 and name their shapes correctly, then choose the ball
 # (กรอบสีแดงในหน้าต่าง depth คือชิ้นที่หุ่นเลือก, กรอบสีฟ้าในภาพสีคือบริเวณที่หุ่นค้นหา)
+# (the red box in the depth window is the object chosen; the blue box in the colour image is the search area)
 # แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# Edit the values in this file, then close the launch (Ctrl+C) and start it again with the same command
 # ตรวจ: ros2 run rospider_gazebo check_shape.py
+# Check: ros2 run rospider_gazebo check_shape.py
 # อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้
+# To start the exercise over: git checkout -- this file
 /**:
   ros__parameters:
     # ระยะจากกล้องถึงพื้น (มิลลิเมตร) - อะไรที่ไม่ใกล้กว่าพื้นจะไม่นับเป็นวัตถุ
+    # Distance from the camera to the floor (mm) - nothing that isn't nearer than the floor counts as an object
     plane_distance: 350.0
     # บริเวณในภาพที่หุ่นค้นหาวัตถุ [y_min, y_max, x_min, x_max] เป็นพิกเซล (ภาพขนาด 640x480)
+    # Image area searched for objects [y_min, y_max, x_min, x_max] in pixels (image 640x480)
     roi: [120, 350, 150, 500]
     # รูปทรงที่หุ่นสนใจ (เลือกจาก sphere, cuboid, cylinder) หุ่นจะเลือกชิ้นที่ใกล้กล้องที่สุด
+    # Shapes of interest (from sphere, cuboid, cylinder); the robot chooses the one nearest the camera
     shapes: ['sphere', 'cuboid', 'cylinder']

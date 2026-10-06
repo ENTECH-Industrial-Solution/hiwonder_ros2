@@ -1,9 +1,15 @@
 # โจทย์ Color Threshold: ปรับช่วงสี LAB ให้ตรวจเจอเฉพาะกล่องที่ต้องการ
+# Color Threshold exercise: tune the LAB colour ranges to detect only the wanted cubes
 # เปิดหน้าต่าง LAB_Tool ด้วย ros2 launch rospider_gazebo color_challenge.launch.py
+# Open the LAB_Tool window with ros2 launch rospider_gazebo color_challenge.launch.py
 # เลื่อน slider แล้วกด Save (บันทึกที่ ~/.ros/color_challenge_tuned.json ซึ่งจะทับค่าในไฟล์นี้)
+# Move the sliders, then press Save (stored in ~/.ros/color_challenge_tuned.json, which overrides this file)
 # หรือแก้ตัวเลขในไฟล์นี้แล้วปิด-เปิด launch ใหม่
+# Or edit the numbers in this file and restart the launch
 # ตรวจ: ros2 run rospider_gazebo check_color.py
+# Check: ros2 run rospider_gazebo check_color.py
 # อยากเริ่มใหม่: git checkout -- ไฟล์นี้ แล้วลบ ~/.ros/color_challenge_tuned.json
+# To start over: git checkout -- this file, then delete ~/.ros/color_challenge_tuned.json
 color_detect:
   ros__parameters:
     min_area_px: 300
@@ -13,6 +19,7 @@ color_detect:
     tune: true
     tuned_path: '~/.ros/color_challenge_tuned.json'
     # ช่วงสีแต่ละสี: [L, A, B] ต่ำสุด (min) และสูงสุด (max) ค่าละ 0-255
+    # Each colour's range: lowest (min) and highest (max) [L, A, B], each 0-255
     red:
       min: [0, 135, 130]
       max: [255, 255, 255]

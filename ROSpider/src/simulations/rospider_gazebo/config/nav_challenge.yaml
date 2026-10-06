@@ -1,18 +1,28 @@
 # โจทย์ Nav2
+# Nav2 exercise
 # แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# Edit the values in this file, then close the launch (Ctrl+C) and start it again with the same command
 # ค่าที่ไม่ได้อยู่ในไฟล์นี้ใช้ของ config/nav2_params.yaml
+# Values not in this file come from config/nav2_params.yaml
 # อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้ แล้ว launch ใหม่
+# To start the exercise over: git checkout -- this file, then relaunch
 /**:
   ros__parameters:
     # ต้องเข้าใกล้เป้าหมายแค่ไหน (เมตร) ถึงนับว่าถึงแล้ว
+    # How close to the goal (m) counts as arrived
     xy_goal_tolerance: 0.002
     # ต้องหันตรงทิศของเป้าหมายแค่ไหน (เรเดียน) ถึงนับว่าถึงแล้ว
+    # How close to the goal's heading (rad) counts as arrived
     yaw_goal_tolerance: 0.1
     # รัศมีตัวหุ่นในแผนที่ (เมตร) - planner จะไม่ให้หุ่นเข้าใกล้ผนังกว่านี้
+    # Robot radius on the map (m) - the planner keeps the robot at least this far from walls
     robot_radius: 0.3
     # ระยะที่ costmap เริ่มกันหุ่นให้ห่างผนัง (เมตร)
+    # Distance from walls (m) at which the costmap starts pushing the robot away
     inflation_radius: 0.3
     # ความเร็วเดินหน้าสูงสุด (เมตร/วินาที)
+    # Maximum forward speed (m/s)
     max_vel_x: 0.05
     # ความเร็วหมุนสูงสุด (เรเดียน/วินาที)
+    # Maximum turning speed (rad/s)
     max_vel_theta: 0.25

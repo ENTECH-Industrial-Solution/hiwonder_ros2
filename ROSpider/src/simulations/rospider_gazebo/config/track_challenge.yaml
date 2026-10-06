@@ -1,15 +1,24 @@
 # โจทย์ Color Tracking: ให้หุ่นเดินตามลูกบอลสีแดง แล้วหยุดตรงหน้าลูกบอลที่ระยะ 0.43-0.52 เมตร ภายใน 40 วินาที
+# Color Tracking exercise: the robot follows the red ball and stops 0.43-0.52 m in front of it within 40 s
 # (ไม่ต้องไปหาลูกบอลสีส้ม)
+# (don't go to the orange ball)
 # แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# Edit the values in this file, then close the launch (Ctrl+C) and start it again with the same command
 # ตรวจ: ros2 run rospider_gazebo check_track.py (ตัวตรวจคลิกเลือกสีลูกบอลแดงและสั่งหุ่นเดินให้เอง)
+# Check: ros2 run rospider_gazebo check_track.py (the checker clicks the red ball's colour and starts the walk itself)
 # อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้
+# To start the exercise over: git checkout -- this file
 /**:
   ros__parameters:
     # ความกว้างของช่วงสีรอบสีที่คลิกเลือก (0-1) - กว้างไปจะจับสีอื่นด้วย แคบไปจะหาไม่เจอ
+    # Width of the colour range around the clicked colour (0-1) - too wide catches other colours, too narrow finds nothing
     threshold: 0.7
     # ตำแหน่งแนวตั้งของจุดสีเหลืองในภาพ (พิกเซล จากขอบบน ภาพสูง 480) - หุ่นเดินจนวัตถุมาอยู่ตรงจุดนี้
+    # Row of the yellow dot in the image (pixels from the top, image 480 high) - the robot walks until the object sits on it
     stop_y: 200
     # ความเร็วเดินสูงสุด (เมตร/วินาที)
+    # Maximum walking speed (m/s)
     max_speed: 0.01
     # ความเร็วหมุนตัวสูงสุด (เรเดียน/วินาที)
+    # Maximum turning speed (rad/s)
     max_turn: 0.1

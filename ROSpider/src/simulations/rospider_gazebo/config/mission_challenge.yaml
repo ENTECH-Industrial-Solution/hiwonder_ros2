@@ -1,19 +1,35 @@
 # ภารกิจปิดท้าย: บล็อกสีน้ำเงินวางอยู่บนแท่นหน้าป้าย AprilTag หมายเลข 3 ในห้อง B
+# Final mission: the blue block sits on the pedestal in front of AprilTag 3 in room B
 # ให้หุ่นไปหยิบมา แล้ววางบนแผ่นสีเหลืองในห้อง A (กลางแผ่นอยู่ที่ x = 0.40, y = 0.55 บนแผนที่)
+# Make the robot fetch it and put it on the yellow pad in room A (pad centre at x = 0.40, y = 0.55 on the map)
 # ในห้อง B มีแท่นอีกแท่น (ป้ายหมายเลข 2) ที่มีบล็อกสีแดง อย่าหยิบผิด
+# Room B has another pedestal (tag 2) with a red block - don't pick the wrong one
 #
 # ไฟล์นี้เพื่อนร่างไว้ รันได้แต่ยังมีจุดผิด - แก้แล้วตรวจใหม่ได้เลย (ตัวตรวจอ่านไฟล์นี้ทุกครั้ง)
+# A teammate drafted this file; it runs but has mistakes - fix it and check again right away (the checker rereads this file every run)
 # ตรวจ: ros2 run rospider_gazebo check_mission.py
+# Check: ros2 run rospider_gazebo check_mission.py
+# ค่า Nav2 ใช้ไฟล์ config/nav_challenge.yaml ของโจทย์ Nav2 - ทำโจทย์ Nav2 ให้ผ่านก่อน
+# Nav2 uses config/nav_challenge.yaml from the Nav2 exercise - pass the Nav2 exercise first
 # ก่อนตรวจรอบใหม่ ปิด-เปิด launch ใหม่ หุ่นและบล็อกจะได้กลับที่เดิม
+# Before each new check, restart the launch so the robot and blocks return to their places
 # อยากเริ่มใหม่: git checkout -- ไฟล์นี้
+# To start over: git checkout -- this file
 #
 # คำสั่งที่ใช้ได้:
+# Available commands:
 #   go_to: [x, y, องศา]   Nav2 เดินไปจุด (x, y) บนแผนที่ แล้วหันไปทางนั้น (0 = +x, 90 = +y)
 #   go_to_tag: N          เดินตามป้าย AprilTag หมายเลข N ไปหยุดตรงหน้า (ระยะที่แขนหยิบของบนแท่นได้)
 #   pick: สี              หยิบบล็อกสีนั้น (red, green, blue) ที่อยู่ตรงหน้า ถือไว้ แล้วถอยออกมา 0.2 เมตร
 #   place: 'x y z'        วางบล็อกที่ถืออยู่ นับจากตัวหุ่น: x ไปข้างหน้า, y ไปทางซ้าย, z ขึ้นบน (เมตร)
+#
+#   go_to: [x, y, deg]    Nav2 walks to (x, y) on the map, then faces that way (0 = +x, 90 = +y)
+#   go_to_tag: N          follow AprilTag N and stop in front of it (within the arm's reach of the pedestal)
+#   pick: colour          pick the block of that colour (red, green, blue) in front, hold it, back off 0.2 m
+#   place: 'x y z'        put the held block down, from the robot: x forward, y left, z up (m)
 
 # ความเร็วเดินตอน go_to (เมตร/วินาที, 0.05-0.20)
+# Walking speed during go_to (m/s, 0.05-0.20)
 speed: 0.15
 steps:
   - go_to: [0.6, 1.5, 0]

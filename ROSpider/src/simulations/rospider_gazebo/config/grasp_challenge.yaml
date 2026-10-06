@@ -1,13 +1,21 @@
 # โจทย์ 3D Object Grasping: ให้หุ่นหยิบบล็อกสีน้ำเงิน (บนแท่นทางขวาของหุ่น) ไปวางบนแผ่นสีเหลืองที่พื้น
+# 3D Object Grasping exercise: the robot picks the blue block (on the pedestal to its right) and puts it on the yellow pad on the floor
 # (แผ่นอยู่ทางขวามือของหุ่นตอนที่หุ่นยืนหยิบบล็อก) หุ่นวางบล็อกลงทันทีที่หยิบขึ้นมาได้
+# (the pad is on the robot's right while it stands picking the block); the robot puts the block down as soon as it has picked it
 # แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# Edit the values in this file, then close the launch (Ctrl+C) and start it again with the same command
 # ตรวจ: ros2 run rospider_gazebo check_grasp.py (ตัวตรวจสั่งหยิบบล็อกสีน้ำเงินให้เอง ใช้เวลาราว 1 นาที)
+# Check: ros2 run rospider_gazebo check_grasp.py (the checker orders the blue block picked; about 1 min)
 # อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้
+# To start the exercise over: git checkout -- this file
 /**:
   ros__parameters:
     # true: เดินไปหาบล็อกก่อนแล้วค่อยหยิบ / false: หยิบจากตรงที่ยืนอยู่
+    # true: walk to the block first, then pick / false: pick from where the robot stands
     walk: false
     # เดินเข้าไปหยุดเมื่อบล็อกอยู่ห่างหน้าหุ่นเท่านี้ (เมตร วัดจากกล้องความลึก)
+    # Stop walking when the block is this far in front of the robot (m, measured by the depth camera)
     target_x: 0.40
     # จุดวางบล็อก "x y z" (เมตร) นับจากตัวหุ่น: x ไปข้างหน้า, y ไปทางซ้าย, z ขึ้นบน
+    # Where to put the block, "x y z" (m) from the robot: x forward, y left, z up
     place_point: '0.02 0.16 0.035'

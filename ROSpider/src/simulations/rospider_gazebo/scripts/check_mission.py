@@ -199,6 +199,8 @@ class Mission:
             reason = STATUS_THAI.get(result.status, result.status)
             if result.status == 'no_path' and self.own_map:
                 reason += ' - ใช้แผนที่ของตัวเองอยู่: แผนที่มีห้อง B และทางเดินครบไหม'
+            if result.status in ('no_path', 'aborted', 'timeout'):
+                reason += ' - ค่า Nav2 มาจาก config/nav_challenge.yaml: ผ่านโจทย์ Nav2 ครบ 3 ด่านแล้วหรือยัง'
             raise StepFailed(reason)
 
     def go_to_tag(self, tag):

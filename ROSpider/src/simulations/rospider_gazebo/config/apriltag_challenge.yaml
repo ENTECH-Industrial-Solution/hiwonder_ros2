@@ -1,15 +1,24 @@
 # โจทย์ AprilTag Tracking: เดินไปหยุดหน้าป้ายหมายเลข 2 ในระยะที่แขนหยิบของบนแท่นได้ ภายใน 40 วินาที
+# AprilTag Tracking exercise: walk to tag 2 and stop within the arm's reach of the pedestal, within 40 s
 # (กล้องห่างป้ายประมาณ 0.30-0.40 เมตร)
+# (camera about 0.30-0.40 m from the tag)
 # แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# Edit the values in this file, then close the launch (Ctrl+C) and start it again with the same command
 # ตรวจ: ros2 run rospider_gazebo check_tag.py (ตัวตรวจสั่งหุ่นเริ่มเดินเอง)
+# Check: ros2 run rospider_gazebo check_tag.py (the checker starts the walk itself)
 # อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้
+# To start the exercise over: git checkout -- this file
 /**:
   ros__parameters:
     # หุ่นเดินตามป้าย AprilTag หมายเลขไหน
+    # Which AprilTag id the robot follows
     target_tag: 1
     # หยุดเมื่อกล้องห่างป้ายเท่านี้ (เมตร)
+    # Stop when the camera is this far from the tag (m)
     stop_distance: 0.8
     # ความเร็วเดินสูงสุด (เมตร/วินาที)
+    # Maximum walking speed (m/s)
     speed_limit: 0.01
     # ความเร็วหมุนตัวสูงสุด (เรเดียน/วินาที)
+    # Maximum turning speed (rad/s)
     turn_limit: 0.2
