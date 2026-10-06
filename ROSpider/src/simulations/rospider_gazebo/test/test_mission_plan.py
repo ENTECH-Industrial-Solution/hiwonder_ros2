@@ -79,7 +79,7 @@ def test_describe_is_thai_and_names_the_values():
 def test_shipped_files_load(name):
     path = PKG / 'config' / name
     if not path.exists():
-        pytest.skip('written in Task 7')
+        pytest.skip('answer key not in the repo (instructors keep it)')
     mission_plan.load(str(path))
 
 

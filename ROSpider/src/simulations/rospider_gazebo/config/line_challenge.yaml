@@ -1,14 +1,22 @@
 # โจทย์ Line Following: ปรับค่าให้หุ่นเกาะเส้นครบรอบทันเวลา
+# Line Following exercise: tune the robot to finish a lap on the line in time
 # แก้ค่าในไฟล์นี้ แล้วปิด launch (Ctrl+C) และเปิดใหม่ด้วยคำสั่งเดิม
+# Edit the values in this file, then close the launch (Ctrl+C) and start it again with the same command
 # ตรวจ: ros2 run rospider_gazebo check_line.py (ตัวตรวจเลือกสีเส้นและสั่งวิ่งให้เอง)
+# Check: ros2 run rospider_gazebo check_line.py (the checker picks the line colour and starts the lap itself)
 # อยากเริ่มโจทย์ใหม่: git checkout -- ไฟล์นี้
+# To start the exercise over: git checkout -- this file
 /**:
   ros__parameters:
     # ความกว้างของช่วงสีรอบสีที่คลิกเลือก (0-1) - กว้างไปจะจับพื้น แคบไปจะไม่เห็นเส้น
+    # Width of the colour range around the clicked colour (0-1) - too wide catches the floor, too narrow loses the line
     threshold: 0.5
     # หุ่นเลี้ยวแรงแค่ไหนเมื่อเส้นเบี้ยวออกจากกลางภาพ (ค่า P ของ PID)
+    # How hard the robot turns when the line drifts from the image centre (the PID's P gain)
     kp: 0.3
     # ความเร็วเดินหน้าตอนเกาะเส้น (เมตร/วินาที)
+    # Forward speed while following the line (m/s)
     speed: 0.03
     # ความเร็วหมุนตัวสูงสุด (เรเดียน/วินาที)
+    # Maximum turning speed (rad/s)
     max_turn: 0.35

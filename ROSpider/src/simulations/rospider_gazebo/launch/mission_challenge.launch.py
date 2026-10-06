@@ -1,7 +1,8 @@
 """`ros2 launch rospider_gazebo mission_challenge.launch.py` -- the final mission.
 
 The maze room with two tag stations and a yellow pad (worlds/mission_challenge.sdf), Nav2 on the
-reference map with the Nav2 exercise's answer key, and every node the mission's steps drive:
+reference map with the participant's own Nav2 exercise file (config/nav_challenge.yaml: the answer
+keys are not in the repo, so the mission builds on the Nav2 exercise), and every node the mission's steps drive:
 color_detect, apriltag_detect, apriltag_track (off until a go_to_tag step), pick_and_place and the
 track_and_grab window. The participant's config/mission_challenge.yaml is read by
 `ros2 run rospider_gazebo check_mission.py` at every run, not here; relaunch only to put the robot
@@ -9,6 +10,8 @@ and the blocks back. See docs/superpowers/specs/2026-09-29-mission-challenge-des
 
   map        your own map from the SLAM exercise (a name in ROSpider/maps, or a path);
              default: the reference map maps/slam_challenge
+  nav_params the Nav2 exercise file to use (default: config/nav_challenge.yaml);
+             instructors pass their nav_challenge_solved.yaml's path
   gui, rviz  as navigation.launch.py
 """
 
@@ -17,11 +20,11 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, ExecuteProcess, GroupAction, IncludeLaunchDescription,
-                            OpaqueFunction, TimerAction)
+                            LogInfo, OpaqueFunction, TimerAction)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from rospider_gazebo import mission_check, nav_params
+from rospider_gazebo import challenge_params, mission_check, nav_params
 
 
 def _demo(pkg, arguments):
@@ -33,8 +36,12 @@ def _demo(pkg, arguments):
 
 def launch_setup(context):
     pkg = get_package_share_directory('rospider_gazebo')
-    merged = nav_params.merged_params_file(os.path.join(pkg, 'config', 'nav2_params.yaml'),
-                                           os.path.join(pkg, 'config', 'nav_challenge_solved.yaml'))
+    nav_file = os.path.realpath(os.path.expanduser(LaunchConfiguration('nav_params').perform(context))
+                                or os.path.join(pkg, 'config', 'nav_challenge.yaml'))
+    try:
+        merged = nav_params.merged_params_file(os.path.join(pkg, 'config', 'nav2_params.yaml'), nav_file)
+    except (OSError, challenge_params.ChallengeConfigError) as err:
+        raise RuntimeError(f'ไฟล์ค่า Nav2 ใช้ไม่ได้: {err}') from None
     # The participant's own SLAM map, or the reference (navigation.launch.py resolves a name).
     map_value = (LaunchConfiguration('map').perform(context)
                  or os.path.join(pkg, 'maps', 'slam_challenge.yaml'))
@@ -83,7 +90,8 @@ def launch_setup(context):
         _demo(pkg, {'demo': 'track_and_grab', 'detector': 'none', 'walk': 'false',
                     'auto_place': 'false'}),
     ]
-    return [navigation,
+    return [LogInfo(msg=f'[mission_challenge] ค่า Nav2 จาก {nav_file} (ไฟล์โจทย์ Nav2)'),
+            navigation,
             TimerAction(period=5.0, actions=blocks + detectors),
             TimerAction(period=7.0, actions=[release]),
             TimerAction(period=10.0, actions=windows)]
@@ -93,6 +101,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('map', default_value='',
                               description='your own map from the SLAM exercise (default: the reference)'),
+        DeclareLaunchArgument('nav_params', default_value='',
+                              description='Nav2 exercise file (default: config/nav_challenge.yaml)'),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('rviz', default_value='true'),
         OpaqueFunction(function=launch_setup),

@@ -2,6 +2,7 @@
 import math
 
 import numpy as np
+import pytest
 from rospider_gazebo import line_check
 from rospider_gazebo.line_track import track_points
 
@@ -91,6 +92,8 @@ def test_shipped_files_hold_the_measured_values():
     # measured: kp 0.3 stops at 6-10% of the lap (level 1); speed 0.03 laps in 237 s (level 3);
     # max_turn 0.1 or threshold 0.05-0.1 alone still lap in 144-148 s, so they ship right
     assert values('line_challenge.yaml') == {'threshold': 0.5, 'kp': 0.3, 'speed': 0.03, 'max_turn': 0.35}
+    if not (config / 'line_challenge_solved.yaml').exists():
+        pytest.skip('answer key not in the repo (instructors keep it)')
     assert values('line_challenge_solved.yaml') == {'threshold': 0.5, 'kp': 1.1, 'speed': 0.05,
                                                     'max_turn': 0.35}
 

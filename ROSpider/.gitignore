@@ -10,4 +10,5 @@ __pycache__/
 # Maps saved by the simulation launch files: RTAB-Map databases are tens to hundreds of MB
 # (GitHub rejects files over 100 MB); 2D maps (.yaml/.pgm) are small and can be committed
 /maps/**/*.db
-
+# Answer keys of the workshop exercises (instructors keep their own copy)
+/src/simulations/rospider_gazebo/config/*_solved.yaml
