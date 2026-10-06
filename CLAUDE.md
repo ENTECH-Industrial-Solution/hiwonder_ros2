@@ -13,7 +13,7 @@ The whole directory is one git repo, `ENTECH-Industrial-Solution/hiwonder_ros2`.
 
 Everything below is about ROSpider. Paths are relative to `ROSpider/`.
 
-`README.md` / `README_cn.md` are the upstream Hiwonder README. Official docs: https://docs.hiwonder.com/projects/ROSpider/en/jetson-orin-nano-version/
+The repo root `README.md` is the Thai overview of all products. Every user-facing doc is Thai `X.md` + English `X.en.md` (language links at the top); edit both together. Hiwonder's upstream `README.md` / `README_cn.md` were removed (a `git subtree pull` that touches them will conflict; keep them deleted). Official docs: https://docs.hiwonder.com/projects/ROSpider/en/jetson-orin-nano-version/
 
 ## Target platform vs. this dev machine
 
@@ -90,7 +90,7 @@ ros2 launch navigation navigation.launch.py map:=map_01
 
 ## Simulation (PC, no hardware)
 
-The user-facing how-to, in Thai, is `ROSpider/SIMULATION.md` (short on purpose: overview, file layout, one short section per workshop topic; the long version is in git history). Entry points:
+The real-robot afternoon (one robot, a station groups rotate through; Hiwonder's own launches, instructor-scored, not yet run on hardware) is `ROSpider/REAL_ROBOT.md`. The user-facing how-to, in Thai, is `ROSpider/README.md` (formerly `SIMULATION.md`) (short on purpose: overview, file layout, one short section per workshop topic; the long version is in git history). Entry points:
 - `ros2 launch rospider_gazebo {gazebo,slam,rtabmap_slam,vslam,navigation,rtabmap_navigation,moveit,pick_place}.launch.py`
 - `ros2 launch rospider_gazebo vision_demo.launch.py demo:=<name>` — the 5 Hiwonder demo windows (the workshop's topics) ported from `example/`; attaches to a running sim rather than starting one
 - URDF viewer: `rospider_description display.launch.py`, which needs `need_compile=True`
