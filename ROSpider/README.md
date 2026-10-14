@@ -26,6 +26,8 @@ cd ~/hiwonder_ros2/ROSpider
 source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
+echo " " >> ~/.bashrc
+echo "#Hiwonder" >> ~/.bashrc
 echo "source ~/hiwonder_ros2/ROSpider/env.bash" >> ~/.bashrc
 echo "source ~/hiwonder_ros2/ROSpider/install/setup.bash" >> ~/.bashrc
 ```
