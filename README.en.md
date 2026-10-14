@@ -31,13 +31,38 @@ hiwonder_ros2/
 - **Never source two models' `install/` in the same terminal.**
 - Each model's code is pulled from Hiwonder's repo with `git subtree` (its history is kept). Entech's additions live in this repo.
 
+## Install and build (first time)
+
+Install ROS 2 Jazzy (`ros-jazzy-desktop`) first, following the [ROS guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html).
+
 ```bash
+sudo apt install git python3-rosdep python3-colcon-common-extensions
+sudo rosdep init   # once per machine; an "already exists" error is fine
+rosdep update
 cd ~
 git clone https://github.com/ENTECH-Industrial-Solution/hiwonder_ros2.git
 cd ~/hiwonder_ros2/ROSpider
 source /opt/ros/jazzy/setup.bash
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
+echo "source ~/hiwonder_ros2/ROSpider/env.bash" >> ~/.bashrc
 ```
+
+The last line makes every new terminal load [env.bash](ROSpider/env.bash) by itself (ROS 2, this workspace and the settings the sim needs). Close and reopen terminals that were already open.
+
+env.bash sets `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and `GZ_IP=127.0.0.1`, which keep ROS and Gazebo traffic on your own machine. Without them, every sim on the same network sees the others' topics (`/clock`, `/controller/cmd_vel`, ...), the sim time jumps back and forth, and the robot ignores teleop.
+
+## Uninstall
+
+Remove this workspace's lines from `~/.bashrc`, delete the repo folder (builds included), and delete the values the tuning windows saved:
+
+```bash
+sed -i -e '\|hiwonder_ros2/ROSpider/|d' -e '/^#Hiwonder$/d' -e '/^ $/d' ~/.bashrc
+rm -rf ~/hiwonder_ros2
+rm -f ~/.ros/{apriltag,color_challenge,color_detect,yolo_detect}_tuned.json
+```
+
+Then close every open terminal (they still hold env.bash's settings). Maps or files you saved outside the repo folder have to be deleted by hand. Leave the packages `apt` and `rosdep` installed: they belong to ROS and other work may use them.
 
 ## Pulling updates from Hiwonder
 
