@@ -4,9 +4,6 @@
 
 ROS 2 code for the Hiwonder robots that Entech teaches with and builds on. There is **one folder per robot model**, and each folder is its own colcon workspace. More models will be added over time.
 
-<p align="center">
-  <img src="ROSpider/sources/01.png" alt="ROSpider" width="480"/>
-</p>
 
 ## Robots in this repo
 
