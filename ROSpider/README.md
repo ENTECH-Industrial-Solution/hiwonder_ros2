@@ -14,20 +14,24 @@
 
 ### ติดตั้งและ build (ครั้งแรก)
 
+ต้องติดตั้ง ROS 2 Jazzy (`ros-jazzy-desktop`) ไว้ก่อน ตาม[คู่มือของ ROS](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
+
 ```bash
-cd ~/entech_hiwonder_ros2_ws/ROSpider
+sudo apt install git python3-rosdep python3-colcon-common-extensions
+sudo rosdep init   # ครั้งเดียวต่อเครื่อง ถ้าขึ้นว่ามีไฟล์อยู่แล้วก็ไม่เป็นไร
+rosdep update
+cd ~
+git clone https://github.com/ENTECH-Industrial-Solution/hiwonder_ros2.git
+cd ~/hiwonder_ros2/ROSpider
 source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
+echo "source ~/hiwonder_ros2/ROSpider/env.bash" >> ~/.bashrc
 ```
 
-ทุก terminal ที่จะใช้ ต้องรันสามบรรทัดนี้ก่อน:
+บรรทัดสุดท้ายทำให้ทุก terminal ที่เปิดใหม่โหลด [env.bash](env.bash) เอง (ROS 2, workspace นี้ และค่าที่ซิมต้องใช้) terminal ที่เปิดค้างไว้ก่อนหน้า ให้ปิดแล้วเปิดใหม่
 
-```bash
-source /opt/ros/jazzy/setup.bash
-source ~/entech_hiwonder_ros2_ws/ROSpider/install/local_setup.bash
-export need_compile=True
-```
+ใน env.bash มี `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` กับ `GZ_IP=127.0.0.1` ซึ่งทำให้ ROS และ Gazebo คุยกันแค่ในเครื่องตัวเอง ถ้าไม่ตั้ง ซิมทุกเครื่องในเครือข่ายเดียวกันจะเห็น topic ของกันและกัน (`/clock`, `/controller/cmd_vel`, ...) เวลาของซิมจะกระโดดไปมา แล้วหุ่นจะไม่เดินตาม teleop
 
 ขับหุ่นด้วยคีย์บอร์ด ใช้ได้กับทุกหัวข้อ:
 
@@ -336,8 +340,8 @@ ros2 run rospider_gazebo check_mission.py                 # รันไฟล�
 
 ## ปัญหาที่พบบ่อย
 
-- **launch ขึ้น `KeyError: 'need_compile'`**: ลืม `export need_compile=True`
+- **launch ขึ้น `KeyError: 'need_compile'`**: terminal นี้ยังไม่ได้โหลด env.bash ให้เปิด terminal ใหม่ หรือรัน `source ~/hiwonder_ros2/ROSpider/env.bash`
 - **Gazebo ปิดเองทันที หรือขึ้น `eglInitialize failed`**: ไดรเวอร์ GPU มีปัญหา ลอง reboot
 - **หุ่นเคลื่อนช้ามาก**: ดู real time factor มุมขวาล่างของ Gazebo ถ้าต่ำกว่า ~0.5 แปลว่าเครื่องทำงานไม่ทัน
 - **node หากันไม่เจอหลังรันหลายรอบ**: ปิดทุกอย่าง แล้วรัน `rm -f /dev/shm/fastrtps_*`
-- **รันหลายคนในเครือข่ายเดียวกัน**: ให้แต่ละเครื่องตั้ง `export ROS_DOMAIN_ID=<เลขไม่ซ้ำกัน>`
+- **กด teleop แล้วหุ่นไม่เดิน (หรือขยับนิดเดียว)**: มี `/clock` จากซิมอื่นปนเข้ามา ตรวจด้วย `ros2 topic info /clock` ต้องมี `Publisher count: 1` ถ้ามากกว่านั้น ให้เช็คว่าทุก terminal โหลด env.bash แล้ว (`echo $GZ_IP` ต้องได้ `127.0.0.1`) หรือปิดซิมที่ค้างอยู่ในเครื่อง

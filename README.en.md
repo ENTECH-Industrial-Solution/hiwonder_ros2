@@ -17,7 +17,7 @@ ROS 2 code for the Hiwonder robots that Entech teaches with and builds on. There
 ## Layout
 
 ```
-entech_hiwonder_ros2_ws/
+hiwonder_ros2/
 ├── README.md          Thai version of this file
 ├── README.en.md       ← this file
 ├── CLAUDE.md          technical notes for developers
@@ -32,7 +32,9 @@ entech_hiwonder_ros2_ws/
 - Each model's code is pulled from Hiwonder's repo with `git subtree` (its history is kept). Entech's additions live in this repo.
 
 ```bash
-cd ~/entech_hiwonder_ros2_ws/ROSpider
+cd ~
+git clone https://github.com/ENTECH-Industrial-Solution/hiwonder_ros2.git
+cd ~/hiwonder_ros2/ROSpider
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 ```
