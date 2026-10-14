@@ -346,3 +346,15 @@ ros2 run rospider_gazebo check_mission.py                 # รันไฟล�
 - **หุ่นเคลื่อนช้ามาก**: ดู real time factor มุมขวาล่างของ Gazebo ถ้าต่ำกว่า ~0.5 แปลว่าเครื่องทำงานไม่ทัน
 - **node หากันไม่เจอหลังรันหลายรอบ**: ปิดทุกอย่าง แล้วรัน `rm -f /dev/shm/fastrtps_*`
 - **กด teleop แล้วหุ่นไม่เดิน (หรือขยับนิดเดียว)**: มี `/clock` จากซิมอื่นปนเข้ามา ตรวจด้วย `ros2 topic info /clock` ต้องมี `Publisher count: 1` ถ้ามากกว่านั้น ให้เช็คว่าทุก terminal โหลด env.bash แล้ว (`echo $GZ_IP` ต้องได้ `127.0.0.1`) หรือปิดซิมที่ค้างอยู่ในเครื่อง
+
+## ถอนการติดตั้ง
+
+ลบบรรทัดของ workspace นี้ออกจาก `~/.bashrc`, ลบโฟลเดอร์ repo (รวม build), และลบค่าที่หน้าต่างปรับตั้งบันทึกไว้:
+
+```bash
+sed -i '\|hiwonder_ros2/ROSpider/|d' ~/.bashrc
+rm -rf ~/hiwonder_ros2
+rm -f ~/.ros/{apriltag,color_challenge,color_detect,yolo_detect}_tuned.json
+```
+
+จากนั้นปิด terminal ที่เปิดอยู่ทั้งหมด (terminal เดิมยังจำค่าจาก env.bash ไว้) แผนที่หรือไฟล์ที่บันทึกไว้นอกโฟลเดอร์ repo ต้องลบเอง แพ็กเกจที่ `apt` และ `rosdep` ติดตั้งให้ไม่ต้องลบ เพราะเป็นของ ROS ที่งานอื่นอาจใช้อยู่
