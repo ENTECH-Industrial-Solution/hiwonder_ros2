@@ -346,3 +346,15 @@ Trying it on the real robot in the afternoon: see [REAL_ROBOT.en.md](REAL_ROBOT.
 - **The robot moves very slowly**: look at the real time factor at the bottom right of Gazebo. Below ~0.5 means the machine can't keep up
 - **Nodes can't find each other after many runs**: close everything, then run `rm -f /dev/shm/fastrtps_*`
 - **Teleop doesn't move the robot (or barely)**: another sim's `/clock` is mixed in. Check `ros2 topic info /clock`: it must say `Publisher count: 1`. If it is more, check that every terminal has loaded env.bash (`echo $GZ_IP` must print `127.0.0.1`), or close the sim still running on your machine.
+
+## Uninstall
+
+Remove the env.bash line from `~/.bashrc`, delete the repo folder (builds included), and delete the values the tuning windows saved:
+
+```bash
+sed -i '\|hiwonder_ros2/ROSpider/env.bash|d' ~/.bashrc
+rm -rf ~/hiwonder_ros2
+rm -f ~/.ros/{apriltag,color_challenge,color_detect,yolo_detect}_tuned.json
+```
+
+Then close every open terminal (they still hold env.bash's settings). Maps or files you saved outside the repo folder have to be deleted by hand. Leave the packages `apt` and `rosdep` installed: they belong to ROS and other work may use them.
