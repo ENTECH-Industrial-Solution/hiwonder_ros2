@@ -14,20 +14,24 @@ This document covers the **PC simulation** (package `rospider_gazebo`) that Ente
 
 ### Install and build (first time)
 
+Install ROS 2 Jazzy (`ros-jazzy-desktop`) first, following the [ROS guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html).
+
 ```bash
-cd ~/entech_hiwonder_ros2_ws/ROSpider
+sudo apt install git python3-rosdep python3-colcon-common-extensions
+sudo rosdep init   # once per machine; an "already exists" error is fine
+rosdep update
+cd ~
+git clone https://github.com/ENTECH-Industrial-Solution/hiwonder_ros2.git
+cd ~/hiwonder_ros2/ROSpider
 source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
+echo "source ~/hiwonder_ros2/ROSpider/env.bash" >> ~/.bashrc
 ```
 
-Run these three lines first in every terminal you use:
+The last line makes every new terminal load [env.bash](env.bash) by itself (ROS 2, this workspace and the settings the sim needs). Close and reopen terminals that were already open.
 
-```bash
-source /opt/ros/jazzy/setup.bash
-source ~/entech_hiwonder_ros2_ws/ROSpider/install/local_setup.bash
-export need_compile=True
-```
+env.bash sets `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and `GZ_IP=127.0.0.1`, which keep ROS and Gazebo traffic on your own machine. Without them, every sim on the same network sees the others' topics (`/clock`, `/controller/cmd_vel`, ...), the sim time jumps back and forth, and the robot ignores teleop.
 
 Drive the robot with the keyboard (works with every topic):
 
@@ -337,8 +341,8 @@ Trying it on the real robot in the afternoon: see [REAL_ROBOT.en.md](REAL_ROBOT.
 
 ## Common problems
 
-- **The launch fails with `KeyError: 'need_compile'`**: you forgot `export need_compile=True`
+- **The launch fails with `KeyError: 'need_compile'`**: this terminal hasn't loaded env.bash; open a new terminal or run `source ~/hiwonder_ros2/ROSpider/env.bash`
 - **Gazebo closes at once, or shows `eglInitialize failed`**: a GPU driver problem; try rebooting
 - **The robot moves very slowly**: look at the real time factor at the bottom right of Gazebo. Below ~0.5 means the machine can't keep up
 - **Nodes can't find each other after many runs**: close everything, then run `rm -f /dev/shm/fastrtps_*`
-- **Several people on the same network**: each machine sets `export ROS_DOMAIN_ID=<a unique number>`
+- **Teleop doesn't move the robot (or barely)**: another sim's `/clock` is mixed in. Check `ros2 topic info /clock`: it must say `Publisher count: 1`. If it is more, check that every terminal has loaded env.bash (`echo $GZ_IP` must print `127.0.0.1`), or close the sim still running on your machine.

@@ -17,7 +17,7 @@
 ## โครงสร้าง
 
 ```
-entech_hiwonder_ros2_ws/
+hiwonder_ros2/
 ├── README.md          ← ไฟล์นี้
 ├── README.en.md       ไฟล์นี้ฉบับภาษาอังกฤษ
 ├── CLAUDE.md          บันทึกเทคนิคสำหรับนักพัฒนา (ภาษาอังกฤษ)
@@ -32,7 +32,9 @@ entech_hiwonder_ros2_ws/
 - โค้ดของแต่ละรุ่นดึงมาจากรีโปของ Hiwonder ด้วย `git subtree` (เก็บประวัติเดิมไว้) ส่วนที่ Entech เพิ่มอยู่ในรีโปนี้
 
 ```bash
-cd ~/entech_hiwonder_ros2_ws/ROSpider
+cd ~
+git clone https://github.com/ENTECH-Industrial-Solution/hiwonder_ros2.git
+cd ~/hiwonder_ros2/ROSpider
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 ```
