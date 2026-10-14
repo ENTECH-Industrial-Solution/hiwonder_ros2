@@ -190,7 +190,9 @@ ros2 run rospider_gazebo check_nav.py
 
 แก้ค่าใน `src/simulations/rospider_gazebo/config/vslam_nav_challenge.yaml` หุ่นต้องเริ่มที่จุดเดียวกับตอนเริ่มทำแผนที่ (จุดเกิด)
 
-วิทยากร: แผนที่เฉลยสร้างด้วย `vslam_challenge.launch.py map:=vslam_answer params:=<path ของ config/vslam_challenge_solved.yaml>` แล้วรัน `python3 src/simulations/rospider_gazebo/tools/drive_route.py` (ขับเส้นทางเดิมให้เองประมาณ 5 นาที) ไฟล์เฉลยของโจทย์นำทางคือ `config/vslam_nav_challenge_solved.yaml`
+ถ้าทำแผนที่ของตัวเองไม่ผ่าน ใช้แผนที่สำรองที่มากับ repo แทน: `map:=vslam_backup`
+
+วิทยากร: แผนที่เฉลยสร้างด้วย `vslam_challenge.launch.py map:=vslam_answer params:=<path ของ config/vslam_challenge_solved.yaml>` แล้วรัน `python3 src/simulations/rospider_gazebo/tools/drive_route.py` (ขับเส้นทางเดิมให้เองประมาณ 5 นาที) ไฟล์เฉลยของโจทย์นำทางคือ `config/vslam_nav_challenge_solved.yaml` แผนที่สำรอง `maps/vslam/vslam_backup.db` คือแผนที่เฉลยที่เก็บภาพ depth เป็นมิลลิเมตร 16 บิต (เดิมเป็นทศนิยม 32 บิต) ภาพ 3D ใน RViz จึงเหมือนเดิม และลบค่าเฉลยของโจทย์ทำแผนที่ออกจากพารามิเตอร์ที่บันทึกไว้ จึงเล็กพอเก็บใน git
 
 ### Color Threshold Adjustment
 
