@@ -184,7 +184,7 @@ ros2 launch rospider_gazebo vslam_challenge.launch.py map:=myvslam
 **โจทย์นำทางด้วย V-SLAM** (10 นาที) ใช้แผนที่ของตัวเองจากโจทย์ข้างบน ค่าตั้งผิดไว้ 2 จาก 6 ค่า เส้นทางและตัวตรวจเดียวกับโจทย์ Nav2
 
 ```bash
-ros2 launch rospider_gazebo vslam_nav_challenge.launch.py map:=myvslam
+ros2 launch rospider_gazebo vslam_nav_challenge.launch.py map:=vslam_backup
 ros2 run rospider_gazebo check_nav.py
 ```
 

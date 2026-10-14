@@ -33,6 +33,10 @@ def launch_setup(context):
         # (see maps.localization_copy): localize on a copy so the map file never changes.
         source = database
         database = localization_copy(database)
+    elif os.path.basename(database) == 'vslam_backup.db':
+        # shipped in git as the navigation exercise's fallback; mapping (-d) would wipe it
+        raise RuntimeError('vslam_backup คือแผนที่สำรองของโจทย์นำทาง ห้ามใช้ชื่อนี้ทำแผนที่ใหม่ '
+                           '(จะลบแผนที่สำรองทิ้ง) ให้ตั้งชื่ออื่น เช่น map:=myvslam')
 
     # The camera must look ahead, like the real robot's init_horizontal action before RTAB-Map
     # (vslam_challenge sets init on purpose)
