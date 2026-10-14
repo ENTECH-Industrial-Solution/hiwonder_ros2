@@ -57,7 +57,7 @@ env.bash sets `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and `GZ_IP=127.0.0.1`, w
 Remove this workspace's lines from `~/.bashrc`, delete the repo folder (builds included), and delete the values the tuning windows saved:
 
 ```bash
-sed -i '\|hiwonder_ros2/ROSpider/|d' ~/.bashrc
+sed -i -e '\|hiwonder_ros2/ROSpider/|d' -e '/^#Hiwonder$/d' -e '/^ $/d' ~/.bashrc
 rm -rf ~/hiwonder_ros2
 rm -f ~/.ros/{apriltag,color_challenge,color_detect,yolo_detect}_tuned.json
 ```

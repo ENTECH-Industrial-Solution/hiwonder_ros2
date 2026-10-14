@@ -60,7 +60,7 @@ echo "source ~/hiwonder_ros2/ROSpider/install/setup.bash" >> ~/.bashrc
 ลบบรรทัดของ workspace นี้ออกจาก `~/.bashrc`, ลบโฟลเดอร์ repo (รวม build), และลบค่าที่หน้าต่างปรับตั้งบันทึกไว้:
 
 ```bash
-sed -i '\|hiwonder_ros2/ROSpider/|d' ~/.bashrc
+sed -i -e '\|hiwonder_ros2/ROSpider/|d' -e '/^#Hiwonder$/d' -e '/^ $/d' ~/.bashrc
 rm -rf ~/hiwonder_ros2
 rm -f ~/.ros/{apriltag,color_challenge,color_detect,yolo_detect}_tuned.json
 ```
