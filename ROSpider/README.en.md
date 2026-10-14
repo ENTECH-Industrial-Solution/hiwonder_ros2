@@ -188,7 +188,9 @@ ros2 run rospider_gazebo check_nav.py
 
 Edit `src/simulations/rospider_gazebo/config/vslam_nav_challenge.yaml`. The robot must start from the same spot where mapping started (the spawn point).
 
-Instructors: the reference map is made with `vslam_challenge.launch.py map:=vslam_answer params:=<path of config/vslam_challenge_solved.yaml>`, then `python3 src/simulations/rospider_gazebo/tools/drive_route.py` (drives the same route by itself, about 5 minutes). The navigation exercise's answer file is `config/vslam_nav_challenge_solved.yaml`.
+If your own map didn't pass, use the backup map that comes with the repo: `map:=vslam_backup`
+
+Instructors: the reference map is made with `vslam_challenge.launch.py map:=vslam_answer params:=<path of config/vslam_challenge_solved.yaml>`, then `python3 src/simulations/rospider_gazebo/tools/drive_route.py` (drives the same route by itself, about 5 minutes). The navigation exercise's answer file is `config/vslam_nav_challenge_solved.yaml`. The backup map `maps/vslam/vslam_backup.db` is the reference map with its depth images stored as 16-bit millimetres instead of 32-bit floats (the 3D view in RViz is unchanged) and the mapping exercise's answer values removed from its stored parameters, so it is small enough for git.
 
 ### Color Threshold Adjustment
 
