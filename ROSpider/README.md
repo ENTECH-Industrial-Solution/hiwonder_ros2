@@ -27,6 +27,7 @@ source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
 echo "source ~/hiwonder_ros2/ROSpider/env.bash" >> ~/.bashrc
+echo "source ~/hiwonder_ros2/ROSpider/install/setup.bash" >> ~/.bashrc
 ```
 
 บรรทัดสุดท้ายทำให้ทุก terminal ที่เปิดใหม่โหลด [env.bash](env.bash) เอง (ROS 2, workspace นี้ และค่าที่ซิมต้องใช้) terminal ที่เปิดค้างไว้ก่อนหน้า ให้ปิดแล้วเปิดใหม่
