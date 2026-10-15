@@ -16,6 +16,8 @@ This document covers the **PC simulation** (package `rospider_gazebo`) that Ente
 
 Install ROS 2 Jazzy (`ros-jazzy-desktop`) first, following the [ROS guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html).
 
+Workshop participants, or a computer that isn't Ubuntu 24.04 (22.04 with Humble, Windows, ...): follow [SETUP.en.md](SETUP.en.md) instead. It sets up without reinstalling the OS and ends with a test of the computer.
+
 ```bash
 sudo apt install git python3-rosdep python3-colcon-common-extensions
 sudo rosdep init   # once per machine; an "already exists" error is fine
@@ -46,6 +48,7 @@ ROSpider/                  colcon workspace (build from inside this folder)
 ├── README.md              simulation guide (Thai)
 ├── README.en.md           ← this file
 ├── REAL_ROBOT.md          real-robot station guide, afternoon (Thai; English: REAL_ROBOT.en.md)
+├── SETUP.md               preparing a computer before the workshop, incl. distrobox / WSL2 (Thai; English: SETUP.en.md)
 ├── maps/                  maps you make (.yaml/.pgm = 2D, .db = 3D)
 └── src/
     ├── driver/ app/ example/ slam/ navigation/ ...   Hiwonder's code (real robot)

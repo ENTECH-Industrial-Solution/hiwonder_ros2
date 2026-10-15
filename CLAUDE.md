@@ -90,7 +90,7 @@ ros2 launch navigation navigation.launch.py map:=map_01
 
 ## Simulation (PC, no hardware)
 
-The real-robot afternoon (one robot, a station groups rotate through; Hiwonder's own launches, instructor-scored, not yet run on hardware) is `ROSpider/REAL_ROBOT.md`. The user-facing how-to, in Thai, is `ROSpider/README.md` (formerly `SIMULATION.md`) (short on purpose: overview, file layout, one short section per workshop topic; the long version is in git history). Entry points:
+Participants' pre-workshop setup (Ubuntu 24.04 native, distrobox `ubuntu:24.04` with a separate `--home` for other Linux, WSL2 for Windows; written from docs, not tried on those hosts) is `ROSpider/SETUP.md`. The real-robot afternoon (one robot, a station groups rotate through; Hiwonder's own launches, instructor-scored, not yet run on hardware) is `ROSpider/REAL_ROBOT.md`. The user-facing how-to, in Thai, is `ROSpider/README.md` (formerly `SIMULATION.md`) (short on purpose: overview, file layout, one short section per workshop topic; the long version is in git history). Entry points:
 - `ros2 launch rospider_gazebo {gazebo,slam,rtabmap_slam,vslam,navigation,rtabmap_navigation,moveit,pick_place}.launch.py`
 - `ros2 launch rospider_gazebo vision_demo.launch.py demo:=<name>` — the 5 Hiwonder demo windows (the workshop's topics) ported from `example/`; attaches to a running sim rather than starting one
 - URDF viewer: `rospider_description display.launch.py`, which needs `need_compile=True`

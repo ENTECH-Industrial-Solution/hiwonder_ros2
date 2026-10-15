@@ -32,6 +32,8 @@ hiwonder_ros2/
 
 ต้องติดตั้ง ROS 2 Jazzy (`ros-jazzy-desktop`) ไว้ก่อน ตาม[คู่มือของ ROS](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
 
+ผู้เข้าอบรม หรือเครื่องที่ไม่ใช่ Ubuntu 24.04 (เช่น 22.04 ที่มี Humble อยู่แล้ว หรือ Windows): ทำตาม [SETUP.md](ROSpider/SETUP.md) แทน มีวิธีใช้โดยไม่ต้องลง OS ใหม่ และขั้นตอนทดสอบเครื่อง
+
 ```bash
 sudo apt install git python3-rosdep python3-colcon-common-extensions
 sudo rosdep init   # ครั้งเดียวต่อเครื่อง ถ้าขึ้นว่ามีไฟล์อยู่แล้วก็ไม่เป็นไร

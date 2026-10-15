@@ -16,6 +16,8 @@
 
 ต้องติดตั้ง ROS 2 Jazzy (`ros-jazzy-desktop`) ไว้ก่อน ตาม[คู่มือของ ROS](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
 
+ผู้เข้าอบรม หรือเครื่องที่ไม่ใช่ Ubuntu 24.04 (เช่น 22.04 ที่มี Humble อยู่แล้ว หรือ Windows): ทำตาม [SETUP.md](SETUP.md) แทน มีวิธีใช้โดยไม่ต้องลง OS ใหม่ และขั้นตอนทดสอบเครื่อง
+
 ```bash
 sudo apt install git python3-rosdep python3-colcon-common-extensions
 sudo rosdep init   # ครั้งเดียวต่อเครื่อง ถ้าขึ้นว่ามีไฟล์อยู่แล้วก็ไม่เป็นไร
@@ -48,6 +50,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/con
 ROSpider/                  colcon workspace (build จากในโฟลเดอร์นี้)
 ├── README.md              ← ไฟล์นี้ (simulation) ฉบับอังกฤษคือ README.en.md
 ├── REAL_ROBOT.md          คู่มือสถานีหุ่นจริง (ช่วงบ่าย) ฉบับอังกฤษคือ REAL_ROBOT.en.md
+├── SETUP.md               เตรียมเครื่องก่อนอบรม (รวม distrobox / WSL2) ฉบับอังกฤษคือ SETUP.en.md
 ├── maps/                  แผนที่ที่ทำเอง (.yaml/.pgm = 2D, .db = 3D)
 └── src/
     ├── driver/ app/ example/ slam/ navigation/ ...   โค้ดของ Hiwonder (หุ่นจริง)

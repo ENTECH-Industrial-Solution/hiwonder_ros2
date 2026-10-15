@@ -32,6 +32,8 @@ hiwonder_ros2/
 
 Install ROS 2 Jazzy (`ros-jazzy-desktop`) first, following the [ROS guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html).
 
+Workshop participants, or a computer that isn't Ubuntu 24.04 (22.04 with Humble, Windows, ...): follow [SETUP.en.md](ROSpider/SETUP.en.md) instead. It sets up without reinstalling the OS and ends with a test of the computer.
+
 ```bash
 sudo apt install git python3-rosdep python3-colcon-common-extensions
 sudo rosdep init   # once per machine; an "already exists" error is fine
